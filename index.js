@@ -1,1 +1,1 @@
-import * as SCRIPT from "~/src/hello_world";
+import * as SCRIPT from "~/src/main";
