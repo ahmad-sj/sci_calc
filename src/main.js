@@ -13,6 +13,7 @@ import {
 import GUI from "lil-gui";
 import { Ball } from "./classes/ball";
 import { Box } from "./classes/box";
+import { CollisionManager } from "./classes/CollisionManager";
 
 // ==================================================
 // setup scene, camera, renderer
@@ -68,7 +69,7 @@ const woodBoxSize = 2;
 const woodBox = new Box(woodBoxPosition, woodBoxSize, "wood_box");
 woodBox.addToScene(scene);
 
-const ironBoxPosition = new THREE.Vector3(-5, 1, -6);
+const ironBoxPosition = new THREE.Vector3(-9, 1, -6);
 const ironBoxSize = 2;
 const ironBox = new Box(ironBoxPosition, ironBoxSize, "iron_box");
 ironBox.addToScene(scene);
@@ -86,14 +87,19 @@ listenToKeyboard(input);
 // draw skybox
 drawSkybox(scene);
 
+// ==================================================
 const cameraOffset = new THREE.Vector3(0, 10, 20); // Distance from object
 
 // ==================================================
 // lil-gui controls
-
 const ballFolder = gui.addFolder("Ball");
-
 ballFolder.add(ball, "mass", 1, 3, 0.5).name("mass");
+
+// ==================================================
+// collisions handling
+const collisionManager = new CollisionManager(ball);
+collisionManager.addItem(woodBox);
+collisionManager.addItem(ironBox);
 
 // ==================================================
 // drawing loop
@@ -102,16 +108,17 @@ function animate(time) {
   timer.update(time);
   const dt = timer.getDelta();
 
-  // ball.update();
+  collisionManager.handleCollision();
+
   ball.move(input, dt);
 
   // Update camera position based on object position + offset
-  // camera.position.copy(ball.position).add(cameraOffset);
-  // camera.lookAt(ball.position);
+  camera.position.copy(ball._position).add(cameraOffset);
+  camera.lookAt(ball._position);
 
   // update camera position according to ball position
-  controls.target.copy(ball.position);
-  controls.update();
+  // controls.target.copy(ball.position);
+  // controls.update();
 
   // update display aspect ratio after screen resize
   updateAspect(renderer, camera);

@@ -3,22 +3,22 @@ import * as THREE from "three";
 const textureLoader = new THREE.TextureLoader();
 
 export class Ball {
-  radius = 1;
+  _radius = 1;
+  _sphereWidthDivisions = 32;
+  _sphereHeightDivisions = 16;
+
   _mass = 1;
-  position = new THREE.Vector3(0, 0, 0);
-  linearVelocity = new THREE.Vector3(0, 0, 0);
-  angularVelocity = 0;
+  _position;
+  _linearVelocity = new THREE.Vector3(0, 0, 0);
+  _angularVelocity = 0;
   _groundY = 0;
-  onGround = this.position.y <= this._groundY + this.radius + 0.001;
 
-  sphereWidthDivisions = 32;
-  sphereHeightDivisions = 16;
-
+  // ==================================================
   constructor() {
     this.geometry = new THREE.SphereGeometry(
-      this.radius,
-      this.sphereWidthDivisions,
-      this.sphereHeightDivisions,
+      this._radius,
+      this._sphereWidthDivisions,
+      this._sphereHeightDivisions,
     );
 
     this.texture = textureLoader.load("static/textures/stone.jpg");
@@ -27,37 +27,70 @@ export class Ball {
     this.material = new THREE.MeshPhongMaterial({ map: this.texture });
 
     this.mesh = new THREE.Mesh(this.geometry, this.material);
-    this.mesh.position.copy(this.position);
+    this.mesh.position.copy(new THREE.Vector3(0, 0, 0));
+    this._position = this.mesh.position;
   }
 
+  // ==================================================
   addToScene(scene) {
     scene.add(this.mesh);
   }
 
-  get groundY() {
-    return this._groundY;
+  // ==================================================
+  get radius() {
+    return this._radius;
   }
 
-  set groundY(number) {
-    this._groundY = number;
-    this.mesh.position.y = number + this.radius;
-  }
-
+  // ==================================================
   get mass() {
     return this._mass;
   }
 
   set mass(number) {
     this._mass = number;
-    this.radius = this._mass;
-    this.mesh.scale.x = this.mesh.scale.y = this.mesh.scale.z = this.radius;
+    this._radius = number;
+    this.mesh.scale.x = this.mesh.scale.y = this.mesh.scale.z = number;
 
-    if (this.position.y > this._groundY + this.radius) {
-      this.position.y = this._groundY + this.radius;
-      if (this.linearVelocity.y < 0) this.linearVelocity.y = 0;
+    if (this._position.y > this._groundY + this._radius) {
+      this._position.y = this._groundY + this._radius;
+      if (this._linearVelocity.y < 0) this._linearVelocity.y = 0;
     }
   }
 
+  // ==================================================
+  get position() {
+    return this._position;
+  }
+
+  set position(vector) {
+    this._position.copy(vector);
+  }
+
+  // ==================================================
+  get groundY() {
+    return this._groundY;
+  }
+
+  set groundY(number) {
+    this._groundY = number;
+    this._position.y = number + this._radius;
+  }
+
+  // ==================================================
+  get linearVelocity() {
+    return this._linearVelocity;
+  }
+
+  set linearVelocity(vector) {
+    this._linearVelocity = vector;
+  }
+
+  // ==================================================
+  get isOnGround() {
+    return this._position.y <= this._groundY + this._radius + 0.001;
+  }
+
+  // ==================================================
   move(input, dt) {
     const g = 9.8;
 
@@ -72,26 +105,19 @@ export class Ball {
     if (input.up) inputForce.z -= moveForce;
     if (input.down) inputForce.z += moveForce;
 
-    const pos = this.mesh.position;
-    const radius = this.radius;
-
-    const onGround = pos.y <= this._groundY + radius + 0.001;
+    const pos = this._position;
+    const radius = this._radius;
 
     const totalForce = new THREE.Vector3();
 
     // -----------------------------------
     // 1. الجاذبية
     // -----------------------------------
-    // if (!onGround) {
-    //   totalForce.y -= g * this.mass;
-    // }
 
-    // if (onGround) {
     const normal = this.mass * g;
-    const speed1 = this.linearVelocity.length();
 
-    if (speed1 > 0) {
-      const dir = this.linearVelocity.clone().normalize();
+    if (this._linearVelocity.length() > 0) {
+      const dir = this._linearVelocity.clone().normalize();
 
       // -----------------------------------
       // 2. Rolling Resistance
@@ -117,9 +143,6 @@ export class Ball {
     // 4. قوة التحكم
     // -----------------------------------
     totalForce.add(inputForce);
-    // } else {
-    //   totalForce.add(inputForce);
-    // }
 
     // -----------------------------------
     // 5. التسارع
@@ -129,50 +152,46 @@ export class Ball {
     // -----------------------------------
     // 6. تحديث السرعة
     // -----------------------------------
-    const oldSpeed = this.linearVelocity.length();
-    this.linearVelocity.add(acceleration.multiplyScalar(dt));
+    const oldSpeed = this._linearVelocity.length();
+    this._linearVelocity.add(acceleration.multiplyScalar(dt));
 
     // -----------------------------------
     // 7. منع overshoot فقط (بدون kill)
     // -----------------------------------
-    const newSpeed = this.linearVelocity.length();
+    const newSpeed = this._linearVelocity.length();
 
-    if (onGround && inputForce.length() === 0) {
+    if (this.isOnGround && inputForce.length() === 0) {
       if (newSpeed > oldSpeed) {
-        this.linearVelocity.set(0, 0, 0);
+        this._linearVelocity.set(0, 0, 0);
       }
     }
 
     // -----------------------------------
     // 8. تحديث الموقع
     // -----------------------------------
-    pos.add(this.linearVelocity.clone().multiplyScalar(dt));
+    pos.add(this._linearVelocity.clone().multiplyScalar(dt));
 
     // -----------------------------------
     // 9. تصادم الأرض
     // -----------------------------------
     if (pos.y < this._groundY + radius) {
       pos.y = this._groundY + radius;
-      if (this.linearVelocity.y < 0) this.linearVelocity.y = 0;
+      if (this._linearVelocity.y < 0) this._linearVelocity.y = 0;
     }
-
-    this.position = pos;
 
     // -----------------------------------
     // 10. الدوران
     // -----------------------------------
-    const speed = this.linearVelocity.length();
-
-    if (speed > 0.0001) {
+    if (this._linearVelocity.length() > 0.0001) {
       const axis = new THREE.Vector3()
         .crossVectors(
-          this.linearVelocity.clone().normalize(),
+          this._linearVelocity.clone().normalize(),
           new THREE.Vector3(0, 1, 0),
         )
         .normalize();
 
-      this.angularVelocity = speed / radius;
-      this.mesh.rotateOnAxis(axis, -this.angularVelocity * dt);
+      this._angularVelocity = this._linearVelocity.length() / this._radius;
+      this.mesh.rotateOnAxis(axis, -this._angularVelocity * dt);
     }
   }
 }
