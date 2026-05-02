@@ -5,7 +5,7 @@ import { Timer } from "three";
 import {
   updateAspect,
   addLights,
-  checkerboardPlane,
+  // checkerboardPlane,
   listenToKeyboard,
   drawSkybox,
 } from "./helpers";
@@ -13,7 +13,9 @@ import {
 import GUI from "lil-gui";
 import { Ball } from "./classes/ball";
 import { Box } from "./classes/box";
+import { Ground } from "./classes/Ground";
 import { CollisionManager } from "./classes/CollisionManager";
+import { ForceManager } from "./classes/ForceManager";
 
 // ==================================================
 // setup scene, camera, renderer
@@ -34,8 +36,6 @@ const controls = new OrbitControls(camera, renderer.domElement);
 // ==================================================
 // globals
 const gui = new GUI();
-const groundY = 0;
-const textureLoader = new THREE.TextureLoader();
 
 const timer = new Timer();
 timer.connect(document);
@@ -55,7 +55,9 @@ addLights(scene);
 
 // ==================================================
 // drawing checkerboard plane
-scene.add(checkerboardPlane(40));
+// scene.add(checkerboardPlane(40));
+const ground = new Ground(new THREE.Vector3(0, 0, 0), 20);
+ground.addToScene(scene);
 
 // ==================================================
 // draw ball
@@ -96,8 +98,11 @@ const ballFolder = gui.addFolder("Ball");
 ballFolder.add(ball, "mass", 1, 3, 0.5).name("mass");
 
 // ==================================================
+const forceManager = new ForceManager(ball);
+
+// ==================================================
 // collisions handling
-const collisionManager = new CollisionManager(ball);
+const collisionManager = new CollisionManager(ball, ground, forceManager);
 collisionManager.addItem(woodBox);
 collisionManager.addItem(ironBox);
 
@@ -109,12 +114,11 @@ function animate(time) {
   const dt = timer.getDelta();
 
   collisionManager.handleCollision();
-
-  ball.move(input, dt);
+  forceManager.apply(input, dt);
 
   // Update camera position based on object position + offset
-  camera.position.copy(ball._position).add(cameraOffset);
-  camera.lookAt(ball._position);
+  camera.position.copy(ball.position).add(cameraOffset);
+  camera.lookAt(ball.position);
 
   // update camera position according to ball position
   // controls.target.copy(ball.position);

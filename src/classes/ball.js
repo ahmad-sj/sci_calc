@@ -50,11 +50,6 @@ export class Ball {
     this._mass = number;
     this._radius = number;
     this.mesh.scale.x = this.mesh.scale.y = this.mesh.scale.z = number;
-
-    if (this._position.y > this._groundY + this._radius) {
-      this._position.y = this._groundY + this._radius;
-      if (this._linearVelocity.y < 0) this._linearVelocity.y = 0;
-    }
   }
 
   // ==================================================
@@ -87,111 +82,20 @@ export class Ball {
 
   // ==================================================
   get isOnGround() {
-    return this._position.y <= this._groundY + this._radius + 0.001;
+    return !(this._position.y <= this._groundY + this._radius + 0.001);
   }
 
   // ==================================================
-  move(input, dt) {
-    const g = 9.8;
+  get angularVelocity() {
+    return this._angularVelocity;
+  }
 
-    const mu = 0.05; // احتكاك انزلاقي (خفيف)
-    const c_rr = 0.02; //مقاومة التدحرج (الأهم)
+  set angularVelocity(vector) {
+    this._angularVelocity = vector;
+  }
 
-    const moveForce = 20;
-    const inputForce = new THREE.Vector3();
-
-    if (input.right) inputForce.x += moveForce;
-    if (input.left) inputForce.x -= moveForce;
-    if (input.up) inputForce.z -= moveForce;
-    if (input.down) inputForce.z += moveForce;
-
-    const pos = this._position;
-    const radius = this._radius;
-
-    const totalForce = new THREE.Vector3();
-
-    // -----------------------------------
-    // 1. الجاذبية
-    // -----------------------------------
-
-    const normal = this.mass * g;
-
-    if (this._linearVelocity.length() > 0) {
-      const dir = this._linearVelocity.clone().normalize();
-
-      // -----------------------------------
-      // 2. Rolling Resistance
-      // -----------------------------------
-      const rollingResistance = dir
-        .clone()
-        .negate()
-        .multiplyScalar(c_rr * normal);
-
-      // -----------------------------------
-      // 3. Sliding friction (اختياري خفيف)
-      // -----------------------------------
-      const slidingFriction = dir
-        .clone()
-        .negate()
-        .multiplyScalar(mu * normal);
-
-      totalForce.add(rollingResistance);
-      totalForce.add(slidingFriction);
-    }
-
-    // -----------------------------------
-    // 4. قوة التحكم
-    // -----------------------------------
-    totalForce.add(inputForce);
-
-    // -----------------------------------
-    // 5. التسارع
-    // -----------------------------------
-    const acceleration = totalForce.clone().divideScalar(this.mass);
-
-    // -----------------------------------
-    // 6. تحديث السرعة
-    // -----------------------------------
-    const oldSpeed = this._linearVelocity.length();
-    this._linearVelocity.add(acceleration.multiplyScalar(dt));
-
-    // -----------------------------------
-    // 7. منع overshoot فقط (بدون kill)
-    // -----------------------------------
-    const newSpeed = this._linearVelocity.length();
-
-    if (this.isOnGround && inputForce.length() === 0) {
-      if (newSpeed > oldSpeed) {
-        this._linearVelocity.set(0, 0, 0);
-      }
-    }
-
-    // -----------------------------------
-    // 8. تحديث الموقع
-    // -----------------------------------
-    pos.add(this._linearVelocity.clone().multiplyScalar(dt));
-
-    // -----------------------------------
-    // 9. تصادم الأرض
-    // -----------------------------------
-    if (pos.y < this._groundY + radius) {
-      pos.y = this._groundY + radius;
-      if (this._linearVelocity.y < 0) this._linearVelocity.y = 0;
-    }
-
-    // -----------------------------------
-    // 10. الدوران
-    // -----------------------------------
-    if (this._linearVelocity.length() > 0.0001) {
-      const axis = new THREE.Vector3()
-        .crossVectors(
-          this._linearVelocity.clone().normalize(),
-          new THREE.Vector3(0, 1, 0),
-        )
-        .normalize();
-
-      this._angularVelocity = this._linearVelocity.length() / this._radius;
-      this.mesh.rotateOnAxis(axis, -this._angularVelocity * dt);
-    }
+  // ==================================================
+  rotate(axis, angle) {
+    this.mesh.rotateOnAxis(axis, angle);
   }
 }

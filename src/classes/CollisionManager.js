@@ -1,15 +1,28 @@
 import * as THREE from "three";
+import { Ground } from "./Ground";
 
 export class CollisionManager {
   _items = [];
   _ball;
+  _ground;
 
-  constructor(ball) {
+  constructor(ball, ground, forceManager) {
     this._ball = ball;
+    this._ground = ground;
+    this._forceManager = forceManager;
+    this._items.push(ground);
   }
 
   addItem(item) {
     this._items.push(item);
+  }
+
+  get forceManager() {
+    return this._forceManager;
+  }
+
+  set forceManager(manager) {
+    this._forceManager = manager;
   }
 
   checkCollision(item) {
@@ -41,7 +54,7 @@ export class CollisionManager {
 
       if (collision.isColliding) {
         // حساب سهم الدفع (Normal)
-        const overlap = this._ball._radius - collision.distance;
+        const overlap = this._ball.radius - collision.distance;
 
         // اتجاه الدفع من النقطة الأقرب باتجاه مركز الكرة
         const direction = {
@@ -56,16 +69,44 @@ export class CollisionManager {
             collision.distance,
         };
 
-        // إعادة تموضع الكرة خارج الجسم تماماً
-        const ballNewX = this._ball.position.x + direction.x * overlap;
-        const ballNewY = this._ball.position.y + direction.y * overlap;
-        const ballNewZ = this._ball.position.z + direction.z * overlap;
-        const ballNewPosition = new THREE.Vector3(ballNewX, ballNewY, ballNewZ);
-        this._ball.position = ballNewPosition;
+        if (item instanceof Ground) {
+          this._ball._position.y = item._position.y + this._ball.radius;
 
-        // عكس السرعة لمحاكاة الارتداد
-        this._ball._linearVelocity.negate().multiplyScalar(0.5);
+          const normalForce = new THREE.Vector3(0, 1, 0).multiplyScalar(
+            this._ball.mass * 9.8,
+          );
+
+          this.forceManager._forces["normal"] = normalForce;
+        } else {
+          // إعادة تموضع الكرة خارج الجسم تماماً
+          const ballNewX = this._ball.position.x + direction.x * overlap;
+          const ballNewY = this._ball.position.y + direction.y * overlap;
+          const ballNewZ = this._ball.position.z + direction.z * overlap;
+          const ballNewPosition = new THREE.Vector3(
+            ballNewX,
+            ballNewY,
+            ballNewZ,
+          );
+          this._ball.position = ballNewPosition;
+
+          // عكس السرعة لمحاكاة الارتداد
+          this._ball._linearVelocity.negate().multiplyScalar(0.5);
+        }
       }
+    }
+
+    const ballX = this._ball.position.x;
+    const ballZ = this._ball.position.z;
+    const ballR = this._ball.radius;
+
+    // check if ball is off ground plane
+    if (
+      ballX + ballR < this._ground._minX ||
+      ballX + ballR > this._ground._maxX ||
+      ballZ + ballR < this._ground._minZ ||
+      ballZ + ballR > this._ground._maxZ
+    ) {
+      delete this.forceManager._forces["normal"];
     }
   }
 }
