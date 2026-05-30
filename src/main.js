@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { Timer } from "three";
+import { updateAllGuiDisplays } from "./helpers";
+import { getNormalAngleRad } from "./helpers";
 
 import {
   updateAspect,
@@ -11,11 +13,14 @@ import {
 } from "./helpers";
 
 import GUI from "lil-gui";
+import { Ground } from "./classes/Ground";
 import { Ball } from "./classes/ball";
 import { Box } from "./classes/box";
-import { Ground } from "./classes/Ground";
+import { Slope } from "./classes/Slope";
 import { CollisionManager } from "./classes/CollisionManager";
 import { ForceManager } from "./classes/ForceManager";
+
+import { VertexNormalsHelper } from "three/examples/jsm/helpers/VertexNormalsHelper.js";
 
 // ==================================================
 // setup scene, camera, renderer
@@ -40,6 +45,8 @@ const gui = new GUI();
 const timer = new Timer();
 timer.connect(document);
 
+const groundY = 0;
+
 // ==================================================
 // pressed arrows status
 const input = {
@@ -51,12 +58,13 @@ const input = {
 
 // ==================================================
 // lights
-addLights(scene);
+addLights(gui, scene);
 
 // ==================================================
-// drawing checkerboard plane
-// scene.add(checkerboardPlane(40));
-const ground = new Ground(new THREE.Vector3(0, 0, 0), 20);
+// draw ground
+const groundPosition = new THREE.Vector3(0, groundY, 0);
+const groundSize = 80;
+const ground = new Ground(groundPosition, groundSize);
 ground.addToScene(scene);
 
 // ==================================================
@@ -66,7 +74,7 @@ ball.addToScene(scene);
 
 // ===================================================
 // draw boxes
-const woodBoxPosition = new THREE.Vector3(5, 1, 0);
+const woodBoxPosition = new THREE.Vector3(7, 1, 3);
 const woodBoxSize = 2;
 const woodBox = new Box(woodBoxPosition, woodBoxSize, "wood_box");
 woodBox.addToScene(scene);
@@ -75,6 +83,56 @@ const ironBoxPosition = new THREE.Vector3(-9, 1, -6);
 const ironBoxSize = 2;
 const ironBox = new Box(ironBoxPosition, ironBoxSize, "iron_box");
 ironBox.addToScene(scene);
+
+// ===================================================
+const slopeNormal = new THREE.Vector3(0, 1, 0.5).normalize();
+const slopeAngleRad = getNormalAngleRad(slopeNormal);
+
+const slopeWidth = 4;
+const slopeLength = 16;
+
+const SlopeXPosition = 0;
+const slopeYPosition = groundY + Math.sin(slopeAngleRad) * (slopeLength / 2);
+const SlopeZPosition = -10;
+
+const slopePosition = new THREE.Vector3(
+  SlopeXPosition,
+  slopeYPosition,
+  SlopeZPosition,
+);
+
+const slope = new Slope(
+  slopePosition,
+  slopeWidth,
+  slopeLength,
+  groundY,
+  slopeNormal,
+);
+
+const planeHelper = new VertexNormalsHelper(slope.mesh, 1, 0xff0000);
+scene.add(planeHelper);
+
+slope.addToScene(scene);
+
+const textureLoader = new THREE.TextureLoader();
+const slsTexture = textureLoader.load("static/textures/wall.jpg");
+
+const slsGeometry = new THREE.PlaneGeometry(slopeLength, slope.height);
+const slsMaterial = new THREE.MeshBasicMaterial({
+  map: slsTexture,
+  side: THREE.DoubleSide,
+});
+
+const slsMesh = new THREE.Mesh(slsGeometry, slsMaterial);
+slsMesh.position.copy(
+  new THREE.Vector3(
+    slope.position.x + slope._width / 2,
+    slope.position.y,
+    slope.position.z,
+  ),
+);
+scene.add(slsMesh);
+slsMesh.rotation.y = Math.PI * -0.5;
 
 // ===================================================
 // draw origin axis
@@ -95,16 +153,27 @@ const cameraOffset = new THREE.Vector3(0, 10, 20); // Distance from object
 // ==================================================
 // lil-gui controls
 const ballFolder = gui.addFolder("Ball");
-ballFolder.add(ball, "mass", 1, 3, 0.5).name("mass");
+ballFolder.add(ball, "mass").name("mass").disable();
+
+ballFolder
+  .add(ball, "type", Object.keys(ball.textures))
+  .name("type")
+  .onChange(() => {
+    updateAllGuiDisplays(gui);
+  });
 
 // ==================================================
-const forceManager = new ForceManager(ball);
+const forceManager = new ForceManager();
+forceManager.target = ball;
 
 // ==================================================
 // collisions handling
-const collisionManager = new CollisionManager(ball, ground, forceManager);
-collisionManager.addItem(woodBox);
-collisionManager.addItem(ironBox);
+const collisionManager = new CollisionManager(forceManager);
+collisionManager.addItem({ ground: ground });
+collisionManager.addItem({ ball: ball });
+collisionManager.addItem({ woodBox: woodBox });
+collisionManager.addItem({ ironBox: ironBox });
+collisionManager.addItem({ slope: slope });
 
 // ==================================================
 // drawing loop
@@ -113,16 +182,18 @@ function animate(time) {
   timer.update(time);
   const dt = timer.getDelta();
 
-  collisionManager.handleCollision();
-  forceManager.apply(input, dt);
+  planeHelper.update();
 
-  // Update camera position based on object position + offset
-  camera.position.copy(ball.position).add(cameraOffset);
-  camera.lookAt(ball.position);
+  collisionManager.update();
+  forceManager.update(input, dt);
 
-  // update camera position according to ball position
-  // controls.target.copy(ball.position);
-  // controls.update();
+  // change camera position according to ball position
+  // camera.position.copy(ball.position).add(cameraOffset);
+  // camera.lookAt(ball.position);
+
+  // control camera with mouse
+  controls.target.copy(ball.position);
+  controls.update();
 
   // update display aspect ratio after screen resize
   updateAspect(renderer, camera);

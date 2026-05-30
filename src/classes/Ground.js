@@ -51,4 +51,8 @@ export class Ground {
     this._minZ = this._position.z - this._size / 2;
     this._maxZ = this._position.z + this._size / 2;
   }
+
+  get position() {
+    return this._position;
+  }
 }

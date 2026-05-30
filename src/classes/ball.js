@@ -1,6 +1,5 @@
 import * as THREE from "three";
-
-const textureLoader = new THREE.TextureLoader();
+import { loadSRGBTexture } from "../helpers.js";
 
 export class Ball {
   _radius = 1;
@@ -21,14 +20,24 @@ export class Ball {
       this._sphereHeightDivisions,
     );
 
-    this.texture = textureLoader.load("static/textures/stone.jpg");
-    this.texture.colorSpace = THREE.SRGBColorSpace;
+    this.textures = {
+      wood: loadSRGBTexture("static/textures/ball/wood/base.jpg"),
+      stone: loadSRGBTexture("static/textures/ball/stone/base.jpg"),
+      paper: loadSRGBTexture("static/textures/ball/paper/base.jpg"),
+    };
 
-    this.material = new THREE.MeshPhongMaterial({ map: this.texture });
+    this.material = new THREE.MeshPhongMaterial();
+
+    this.type = "wood";
 
     this.mesh = new THREE.Mesh(this.geometry, this.material);
+
     this.mesh.position.copy(new THREE.Vector3(0, 0, 0));
     this._position = this.mesh.position;
+
+    const axesHelper = new THREE.AxesHelper(2);
+
+    this.mesh.add(axesHelper);
   }
 
   // ==================================================
@@ -97,5 +106,50 @@ export class Ball {
   // ==================================================
   rotate(axis, angle) {
     this.mesh.rotateOnAxis(axis, angle);
+  }
+
+  // ==================================================
+  set type(input) {
+    // update ball type
+    this._type = input;
+
+    // setting ball properties based on type
+    switch (input) {
+      case "paper": {
+        this._mass = 0.75;
+        break;
+      }
+
+      case "stone": {
+        this._mass = 3;
+        break;
+      }
+
+      case "wood": {
+        this._mass = 1.5;
+        break;
+      }
+    }
+
+    // applying textures
+    this.material.map = this.textures[input];
+
+    const textureLoader = new THREE.TextureLoader();
+
+    const bumpMap = textureLoader.load(
+      `static/textures/ball/${input}/bump_map.jpg`,
+    );
+    this.material.bumpMap = bumpMap;
+
+    const normalMap = textureLoader.load(
+      `static/textures/ball/${input}/normal_map.jpg`,
+    );
+    this.material.normalMap = normalMap;
+
+    this.material.needsUpdate = true;
+  }
+
+  get type() {
+    return this._type;
   }
 }

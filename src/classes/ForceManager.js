@@ -1,23 +1,65 @@
 import * as THREE from "three";
 
 export class ForceManager {
-  _ball;
+  _target;
   _forces = {};
-  _g = 9.8;
+  _g = 9.81; // تسارع الجاذبية
   _c_rr = 0.05; //مقاومة التدحرج (الأهم)
   _mu = 0.05; // احتكاك انزلاقي (خفيف)
 
-  constructor(ball) {
-    this._ball = ball;
+  set target(item) {
+    this._target = item;
+  }
+
+  get target() {
+    return this._target;
+  }
+
+  get g() {
+    return this._g;
   }
 
   add(force) {
-    this._forces.push(force);
+    this._forces[Object.keys(force)[0]] = Object.values(force)[0];
   }
 
-  apply(input, dt) {
+  getForce(forceName) {
+    return this._forces[forceName];
+  }
+
+  remove(forceName) {
+    delete this._forces[forceName];
+  }
+
+  updateGravity(normal) {
+    // Fg = (m.g.sin(theta)).i^ - (m.g.cos(theta)).j^
+
+    const target = this._target;
+
+    const globalGravity = new THREE.Vector3(0, -this.g * target.mass, 0);
+
+    if (normal.x === 0 && normal.y === 1 && normal.z === 0) {
+      this.add({ gravity: globalGravity });
+      return;
+    }
+
+    const Fg_down = normal.clone().multiplyScalar(globalGravity.dot(normal));
+
+    const Fg_parallel = globalGravity.clone().sub(Fg_down);
+
+    this.add({ gravity: Fg_parallel });
+  }
+
+  removeGravity() {
+    this.remove("gravity");
+  }
+
+  update(input, dt) {
     const totalForce = new THREE.Vector3(0, 0, 0);
-    const linVel = this._ball.linearVelocity;
+
+    const ball = this._target;
+
+    const linVel = ball.linearVelocity;
 
     const moveForce = 20;
     const inputForce = new THREE.Vector3();
@@ -30,13 +72,11 @@ export class ForceManager {
     // -----------------------------------
     // 1. الجاذبية
     // -----------------------------------
-    const weightForce = new THREE.Vector3(0, -1, 0).multiplyScalar(
-      this._ball._mass * this._g,
-    );
 
-    totalForce.add(weightForce);
+    // added / removed in collision manager to allow calculation
+    // according to collision status with slope or ground
 
-    const normal = this._ball.mass * this._g;
+    const normal = ball._mass * this._g;
 
     if (linVel.length() > 0) {
       const dir = linVel.clone().normalize();
@@ -77,28 +117,35 @@ export class ForceManager {
     // -----------------------------------
     // 5. التسارع
     // -----------------------------------
-    const acceleration = totalForce.clone().divideScalar(this._ball.mass);
+    const acceleration = totalForce.clone().divideScalar(ball.mass);
 
-    const pos = this._ball._position;
-
-    // const oldSpeed = linVel.length();
+    const pos = ball._position;
 
     linVel.add(acceleration.multiplyScalar(dt));
-
-    // const newSpeed = linVel.length();
 
     pos.add(linVel.clone().multiplyScalar(dt));
 
     // -----------------------------------
-    // الدوران
+    // الدوران (Using Quaternions)
     // -----------------------------------
     if (linVel.length() > 0.0001) {
+      // 1. Calculate the physical world axis of rotation
       const axis = new THREE.Vector3()
         .crossVectors(linVel.clone().normalize(), new THREE.Vector3(0, 1, 0))
         .normalize();
 
-      this._ball.angularVelocity = linVel.length() / this._ball.radius;
-      this._ball.rotate(axis, -this._ball._angularVelocity * dt);
+      // 2. Calculate angular speed and delta angle
+      ball.angularVelocity = linVel.length() / ball.radius;
+      const angleDelta = ball.angularVelocity * dt;
+
+      // 3. Create a quaternion representing ONLY this frame's rotation step
+      const rotationStep = new THREE.Quaternion().setFromAxisAngle(
+        axis,
+        -angleDelta,
+      );
+
+      // 4. Pre-multiply to apply the rotation around the global world axis
+      ball.mesh.quaternion.premultiply(rotationStep);
     }
   }
 }

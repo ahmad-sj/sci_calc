@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import GUI from "lil-gui";
 
+const textureLoader = new THREE.TextureLoader();
+
 export function resizeRendererToDisplaySize(renderer) {
   const canvas = renderer.domElement;
   //clientWidth is Content width + Padding.
@@ -86,15 +88,15 @@ export class ColorGUIHelper {
   }
 }
 
-export function addLights(scene) {
+export function addLights(gui, scene) {
   const color = 0xffffff;
   const intensity = 1;
 
   // HemisphereLight
   /* A HemisphereLight takes a sky color and a ground color and just multiplies the material's color between those 2 colors
 the sky color if the surface of the object is pointing up and the ground color if the surface of the object is pointing down. */
-  const skyColor = 0xb1e1ff; // light blue
-  const groundColor = 0xb97a20;
+  const skyColor = 0xffffff; // light blue
+  const groundColor = 0x878787;
 
   const hemisphereLight = new THREE.HemisphereLight(
     skyColor,
@@ -105,18 +107,18 @@ the sky color if the surface of the object is pointing up and the ground color i
 
   // const gui = new GUI();
 
-  // const hemisphereLightFolder = gui.addFolder("HemisphereLight");
+  const hemisphereLightFolder = gui.addFolder("HemisphereLight");
 
   hemisphereLight.visible = true;
-  // hemisphereLightFolder.add(hemisphereLight, "visible").name("hemisphereLight");
+  hemisphereLightFolder.add(hemisphereLight, "visible").name("hemisphereLight");
 
-  // hemisphereLightFolder
-  //   .addColor(new ColorGUIHelper(hemisphereLight, "color"), "value")
-  //   .name("skyColor");
-  // hemisphereLightFolder
-  //   .addColor(new ColorGUIHelper(hemisphereLight, "groundColor"), "value")
-  //   .name("groundColor");
-  // hemisphereLightFolder.add(hemisphereLight, "intensity", 0, 5, 0.01);
+  hemisphereLightFolder
+    .addColor(new ColorGUIHelper(hemisphereLight, "color"), "value")
+    .name("skyColor");
+  hemisphereLightFolder
+    .addColor(new ColorGUIHelper(hemisphereLight, "groundColor"), "value")
+    .name("groundColor");
+  hemisphereLightFolder.add(hemisphereLight, "intensity", 0, 5, 0.01);
 
   // DirectionalLight
   /* a directional light computes light coming in one direction.
@@ -131,15 +133,15 @@ the sky color if the surface of the object is pointing up and the ground color i
 
   directionalLight.visible = true;
 
-  // const directionalLightFolder = gui.addFolder("DirectionalLight");
+  const directionalLightFolder = gui.addFolder("DirectionalLight");
 
-  // directionalLightFolder
-  //   .add(directionalLight, "visible")
-  //   .name("directionalLight");
-  // directionalLightFolder
-  //   .addColor(new ColorGUIHelper(directionalLight, "color"), "value")
-  //   .name("color");
-  // directionalLightFolder.add(directionalLight, "intensity", 0, 5, 0.01);
+  directionalLightFolder
+    .add(directionalLight, "visible")
+    .name("directionalLight");
+  directionalLightFolder
+    .addColor(new ColorGUIHelper(directionalLight, "color"), "value")
+    .name("color");
+  directionalLightFolder.add(directionalLight, "intensity", 0, 5, 0.01);
 
   // const directionalLightHelper = new THREE.DirectionalLightHelper(
   //   directionalLight,
@@ -206,4 +208,46 @@ export function drawSkybox(scene) {
     "static/textures/skybox/nz.png",
   ]);
   scene.background = texture;
+}
+
+export const loadSRGBTexture = (url) => {
+  const texture = textureLoader.load(url);
+  // CRUCIAL: Assign the sRGB color space to the texture
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+};
+
+export function getClosestPoint3d(item, ball) {
+  return {
+    x: Math.max(item._minX, Math.min(ball.position.x, item._maxX)),
+    y: Math.max(item._minY, Math.min(ball.position.y, item._maxY)),
+    z: Math.max(item._minZ, Math.min(ball.position.z, item._maxZ)),
+  };
+}
+
+export function updateAllGuiDisplays(targetGui) {
+  // Update all controllers in the current folder/root
+  for (const controller of targetGui.controllers) {
+    controller.updateDisplay();
+  }
+  // Walk through nested folders
+  for (const folder of targetGui.folders) {
+    updateAllGuiDisplays(folder);
+  }
+}
+
+export function getNormalAngleRad(normal) {
+  // 1. Define the world's horizontal plane normal (pointing straight up)
+  const upAxis = new THREE.Vector3(0, 1, 0);
+
+  // 2. Get the angle in radians between the slope normal and the up axis
+  let angleToUp = normal.angleTo(upAxis);
+
+  // 3. (Optional) Get the actual slope angle from the horizontal axis
+  // let slopeAngle = Math.PI / 2 - angleToUp;
+
+  // Convert to degrees if needed
+  // let slopeDegrees = THREE.MathUtils.radToDeg(slopeAngle);
+  // return 90 - slopeDegrees;
+  return angleToUp;
 }
