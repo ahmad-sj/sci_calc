@@ -52,7 +52,8 @@ const input = {
   up: false,
   down: false,
   reset: false,
-  mode: false,
+  mode1: false,
+  mode2: false,
   camera: false,
   type: false,
 };
@@ -147,8 +148,11 @@ function controlKeys() {
     ball.reset();
     slope.reset();
   }
-  if (input.mode) {
-    forceManager.mode = !forceManager.mode;
+  if (input.mode1) {
+    forceManager.mode = false;
+  }
+  if (input.mode2) {
+    forceManager.mode = true;
   }
   if (!forceManager.mode) {
     slope.rotate(input);

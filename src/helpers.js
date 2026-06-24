@@ -188,7 +188,8 @@ export function listenToKeyboard(input) {
     if (e.key === "ArrowUp") input.up = true;
     if (e.key === "ArrowDown") input.down = true;
     if (e.key === "r") input.reset = true;
-    if (e.key === "m") input.mode = true;
+    if (e.key === "1") input.mode1 = true;
+    if (e.key === "2") input.mode2 = true;
     if (e.key === "c") input.camera = true;
     if (e.key === "t") input.type = true;
   });
@@ -199,7 +200,8 @@ export function listenToKeyboard(input) {
     if (e.key === "ArrowUp") input.up = false;
     if (e.key === "ArrowDown") input.down = false;
     if (e.key === "r") input.reset = false;
-    if (e.key === "m") input.mode = false;
+    if (e.key === "1") input.mode1 = false;
+    if (e.key === "2") input.mode2 = false;
     if (e.key === "c") input.camera = false;
     if (e.key === "t") input.type = false;
   });

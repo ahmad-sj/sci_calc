@@ -17,17 +17,17 @@ export class CollisionManager {
   }
 
   checkAABBCollision(ball, item) {
-    // 1. إيجاد أقرب نقطة على الصندوق لمركز الكرة
+    // 1. Find closest point on item to ball's center
     const closestPoint = getClosestPoint3d(item, ball);
 
-    // 2. حساب المسافة بين مركز الكرة وهذه النقطة
+    // 2. Calc distance between ball's center and closest point
     const distance = Math.sqrt(
       (closestPoint.x - ball.position.x) ** 2 +
         (closestPoint.y - ball.position.y) ** 2 +
         (closestPoint.z - ball.position.z) ** 2,
     );
 
-    // 3. إذا كانت المسافة أقل من نصف القطر، فهناك تصادم
+    // 3. if distance is smaller than ball's radius, we have a collision
     return {
       isColliding: distance < ball.radius,
       closestPoint: closestPoint,
@@ -39,24 +39,24 @@ export class CollisionManager {
     const collision = this.checkAABBCollision(ball, item);
 
     if (collision.isColliding) {
-      // حساب سهم الدفع (Normal)
+      // calc overlap between ball and item
       const overlap = ball.radius - collision.distance;
 
-      // اتجاه الدفع من النقطة الأقرب باتجاه مركز الكرة
+      // calc overlapping direction vector
       const direction = {
         x: (ball.position.x - collision.closestPoint.x) / collision.distance,
         y: (ball.position.y - collision.closestPoint.y) / collision.distance,
         z: (ball.position.z - collision.closestPoint.z) / collision.distance,
       };
 
-      // إعادة تموضع الكرة خارج الجسم تماماً
+      // correct ball's position to prevent penetration
       const ballNewX = ball.position.x + direction.x * overlap;
       const ballNewY = ball.position.y + direction.y * overlap;
       const ballNewZ = ball.position.z + direction.z * overlap;
       const ballNewPosition = new THREE.Vector3(ballNewX, ballNewY, ballNewZ);
       ball.position = ballNewPosition;
 
-      // عكس السرعة لمحاكاة الارتداد
+      // mocking collision response
       ball._linearVelocity.negate().multiplyScalar(0.5);
     }
   }
