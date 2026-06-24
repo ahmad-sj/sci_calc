@@ -2,7 +2,6 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { Timer } from "three";
 import { updateAllGuiDisplays } from "./helpers";
-import { getNormalAngleRad } from "./helpers";
 
 import {
   updateAspect,
@@ -19,7 +18,6 @@ import { Box } from "./classes/box";
 import { Slope } from "./classes/Slope";
 import { CollisionManager } from "./classes/CollisionManager";
 import { ForceManager } from "./classes/ForceManager";
-
 import { VertexNormalsHelper } from "three/examples/jsm/helpers/VertexNormalsHelper.js";
 
 // ==================================================
@@ -35,8 +33,8 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, canvas });
 // ==================================================
 //setting camera controls
 const controls = new OrbitControls(camera, renderer.domElement);
-// controls.target.set(0, 5, 0);
-// controls.update();
+const cameraOffset = new THREE.Vector3(0, 10, 20); // Distance from object
+let cameraMode = true;
 
 // ==================================================
 // globals
@@ -47,13 +45,16 @@ timer.connect(document);
 
 const groundY = 0;
 
-// ==================================================
 // pressed arrows status
 const input = {
   left: false,
   right: false,
   up: false,
   down: false,
+  reset: false,
+  mode: false,
+  camera: false,
+  type: false,
 };
 
 // ==================================================
@@ -67,72 +68,38 @@ const groundSize = 80;
 const ground = new Ground(groundPosition, groundSize);
 ground.addToScene(scene);
 
-// ==================================================
-// draw ball
-const ball = new Ball();
-ball.addToScene(scene);
-
 // ===================================================
 // draw boxes
-const woodBoxPosition = new THREE.Vector3(7, 1, 3);
+const woodBoxPosition = new THREE.Vector3(16, 1, 3);
 const woodBoxSize = 2;
 const woodBox = new Box(woodBoxPosition, woodBoxSize, "wood_box");
 woodBox.addToScene(scene);
 
-const ironBoxPosition = new THREE.Vector3(-9, 1, -6);
+const ironBoxPosition = new THREE.Vector3(-16, 1, -6);
 const ironBoxSize = 2;
 const ironBox = new Box(ironBoxPosition, ironBoxSize, "iron_box");
 ironBox.addToScene(scene);
 
 // ===================================================
-const slopeNormal = new THREE.Vector3(0, 1, 0.5).normalize();
-const slopeAngleRad = getNormalAngleRad(slopeNormal);
-
-const slopeWidth = 4;
+// draw slope
+const slopePosition = new THREE.Vector3(0, 5, 0);
+const slopeWidth = 16;
 const slopeLength = 16;
+const slopeNormal = new THREE.Vector3(0, 1, 0).normalize();
 
-const SlopeXPosition = 0;
-const slopeYPosition = groundY + Math.sin(slopeAngleRad) * (slopeLength / 2);
-const SlopeZPosition = -10;
+const slope = new Slope(slopePosition, slopeWidth, slopeLength, slopeNormal);
 
-const slopePosition = new THREE.Vector3(
-  SlopeXPosition,
-  slopeYPosition,
-  SlopeZPosition,
-);
-
-const slope = new Slope(
-  slopePosition,
-  slopeWidth,
-  slopeLength,
-  groundY,
-  slopeNormal,
-);
-
+// show normals of solpe vertices
 const planeHelper = new VertexNormalsHelper(slope.mesh, 1, 0xff0000);
 scene.add(planeHelper);
 
 slope.addToScene(scene);
 
-const textureLoader = new THREE.TextureLoader();
-const slsTexture = textureLoader.load("static/textures/wall.jpg");
-
-const slsGeometry = new THREE.PlaneGeometry(slopeLength, slope.height);
-const slsMaterial = new THREE.MeshBasicMaterial({
-  map: slsTexture,
-  side: THREE.DoubleSide,
-});
-
-const slsMesh = new THREE.Mesh(slsGeometry, slsMaterial);
-slsMesh.position.copy(
-  new THREE.Vector3(
-    slope.position.x + slope._width / 2,
-    slope.position.y,
-    slope.position.z,
-  ),
-);
-scene.add(slsMesh);
-slsMesh.rotation.y = Math.PI * -0.5;
+// ==================================================
+// draw ball
+const ball = new Ball();
+ball.position.set(0, 10, 0);
+ball.addToScene(scene);
 
 // ===================================================
 // draw origin axis
@@ -148,9 +115,6 @@ listenToKeyboard(input);
 drawSkybox(scene);
 
 // ==================================================
-const cameraOffset = new THREE.Vector3(0, 10, 20); // Distance from object
-
-// ==================================================
 // lil-gui controls
 const ballFolder = gui.addFolder("Ball");
 ballFolder.add(ball, "mass").name("mass").disable();
@@ -163,6 +127,7 @@ ballFolder
   });
 
 // ==================================================
+// force manager
 const forceManager = new ForceManager();
 forceManager.target = ball;
 
@@ -176,24 +141,65 @@ collisionManager.addItem({ ironBox: ironBox });
 collisionManager.addItem({ slope: slope });
 
 // ==================================================
-// drawing loop
 
+function controlKeys() {
+  if (input.reset) {
+    ball.reset();
+    slope.reset();
+  }
+  if (input.mode) {
+    forceManager.mode = !forceManager.mode;
+  }
+  if (!forceManager.mode) {
+    slope.rotate(input);
+  }
+  if (input.camera) {
+    cameraMode = !cameraMode;
+  }
+  if (input.type) {
+    ball.type =
+      ball.type === "wood"
+        ? "stone"
+        : ball.type === "stone"
+          ? "paper"
+          : ball.type === "paper"
+            ? "wood"
+            : "wood";
+  }
+}
+
+// ==================================================
+
+function updateCamera() {
+  if (cameraMode) {
+    // move camera with ball position
+    camera.position.copy(ball.position).add(cameraOffset);
+    camera.lookAt(ball.position);
+  } else {
+    // control camera with mouse
+    controls.target.copy(ball.position);
+    controls.update();
+  }
+}
+
+// ==================================================
+// drawing loop
 function animate(time) {
   timer.update(time);
   const dt = timer.getDelta();
 
+  controlKeys();
+
   planeHelper.update();
 
   collisionManager.update();
+
   forceManager.update(input, dt);
 
-  // change camera position according to ball position
-  // camera.position.copy(ball.position).add(cameraOffset);
-  // camera.lookAt(ball.position);
+  console.log("contact: ", ball.contactNormal);
+  console.log("slope: ", slope.normal);
 
-  // control camera with mouse
-  controls.target.copy(ball.position);
-  controls.update();
+  updateCamera();
 
   // update display aspect ratio after screen resize
   updateAspect(renderer, camera);

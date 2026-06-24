@@ -12,6 +12,8 @@ export class Ball {
   _angularVelocity = 0;
   _groundY = 0;
 
+  _contactNormal = new THREE.Vector3(0, 1, 0);
+
   // ==================================================
   constructor() {
     this.geometry = new THREE.SphereGeometry(
@@ -104,8 +106,12 @@ export class Ball {
   }
 
   // ==================================================
-  rotate(axis, angle) {
-    this.mesh.rotateOnAxis(axis, angle);
+  get contactNormal() {
+    return this._contactNormal;
+  }
+
+  set contactNormal(vector) {
+    this._contactNormal = vector;
   }
 
   // ==================================================
@@ -119,12 +125,10 @@ export class Ball {
         this._mass = 0.75;
         break;
       }
-
       case "stone": {
         this._mass = 3;
         break;
       }
-
       case "wood": {
         this._mass = 1.5;
         break;
@@ -151,5 +155,19 @@ export class Ball {
 
   get type() {
     return this._type;
+  }
+
+  // ==================================================
+  rotate(axis, angle) {
+    this.mesh.rotateOnAxis(axis, angle);
+  }
+
+  reset() {
+    this.linearVelocity.set(0, 0, 0);
+    this.angularVelocity = 0;
+    this.mesh.quaternion.identity();
+    this.position.set(0, 10, 0);
+    this.mass = 1;
+    this.contactNormal.set(0, 1, 0);
   }
 }

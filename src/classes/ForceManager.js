@@ -7,6 +7,8 @@ export class ForceManager {
   _c_rr = 0.05; //مقاومة التدحرج (الأهم)
   _mu = 0.05; // احتكاك انزلاقي (خفيف)
 
+  _mode = false;
+
   set target(item) {
     this._target = item;
   }
@@ -17,6 +19,14 @@ export class ForceManager {
 
   get g() {
     return this._g;
+  }
+
+  get mode() {
+    return this._mode;
+  }
+
+  set mode(boolean) {
+    this._mode = boolean;
   }
 
   add(force) {
@@ -64,10 +74,12 @@ export class ForceManager {
     const moveForce = 20;
     const inputForce = new THREE.Vector3();
 
-    if (input.right) inputForce.x += moveForce;
-    if (input.left) inputForce.x -= moveForce;
-    if (input.up) inputForce.z -= moveForce;
-    if (input.down) inputForce.z += moveForce;
+    if (this.mode === true) {
+      if (input.right) inputForce.x += moveForce;
+      if (input.left) inputForce.x -= moveForce;
+      if (input.up) inputForce.z -= moveForce;
+      if (input.down) inputForce.z += moveForce;
+    }
 
     // -----------------------------------
     // 1. الجاذبية
@@ -131,7 +143,7 @@ export class ForceManager {
     if (linVel.length() > 0.0001) {
       // 1. Calculate the physical world axis of rotation
       const axis = new THREE.Vector3()
-        .crossVectors(linVel.clone().normalize(), new THREE.Vector3(0, 1, 0))
+        .crossVectors(linVel.clone().normalize(), ball.contactNormal)
         .normalize();
 
       // 2. Calculate angular speed and delta angle
@@ -146,6 +158,7 @@ export class ForceManager {
 
       // 4. Pre-multiply to apply the rotation around the global world axis
       ball.mesh.quaternion.premultiply(rotationStep);
+      ball.mesh.quaternion.normalize();
     }
   }
 }
