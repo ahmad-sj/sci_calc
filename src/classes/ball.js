@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { loadSRGBTexture } from "../helpers.js";
+import { MyQuat } from "./MyQuat.js";
 
 export class Ball {
   _radius = 1;
@@ -11,6 +12,9 @@ export class Ball {
   _linearVelocity = new THREE.Vector3(0, 0, 0);
   _angularVelocity = 0;
   _groundY = 0;
+
+  _orientation = new MyQuat();
+  _contactNormal = new THREE.Vector3(0, 1, 0);
 
   // ==================================================
   constructor() {
@@ -104,8 +108,12 @@ export class Ball {
   }
 
   // ==================================================
-  rotate(axis, angle) {
-    this.mesh.rotateOnAxis(axis, angle);
+  get contactNormal() {
+    return this._contactNormal;
+  }
+
+  set contactNormal(vector) {
+    this._contactNormal = vector;
   }
 
   // ==================================================
@@ -119,12 +127,10 @@ export class Ball {
         this._mass = 0.75;
         break;
       }
-
       case "stone": {
         this._mass = 3;
         break;
       }
-
       case "wood": {
         this._mass = 1.5;
         break;
@@ -151,5 +157,39 @@ export class Ball {
 
   get type() {
     return this._type;
+  }
+
+  get orientation() {
+    return this._orientation;
+  }
+
+  set orientation(myQuat) {
+    this._orientation = myQuat;
+  }
+
+  // ==================================================
+  rotate(axis, angle) {
+    this.mesh.rotateOnAxis(axis, angle);
+  }
+
+  reset() {
+    this.linearVelocity.set(0, 0, 0);
+    this.angularVelocity = 0;
+
+    this.orientation.identity();
+    this.updateMesh(this.orientation);
+
+    this.position.set(0, 10, 0);
+    this.mass = 1;
+    this.contactNormal.set(0, 1, 0);
+  }
+
+  updateMesh() {
+    this.mesh.quaternion.set(
+      this.orientation.x,
+      this.orientation.y,
+      this.orientation.z,
+      this.orientation.w,
+    );
   }
 }

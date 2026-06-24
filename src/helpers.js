@@ -187,6 +187,11 @@ export function listenToKeyboard(input) {
     if (e.key === "ArrowLeft") input.left = true;
     if (e.key === "ArrowUp") input.up = true;
     if (e.key === "ArrowDown") input.down = true;
+    if (e.key === "r") input.reset = true;
+    if (e.key === "1") input.mode1 = true;
+    if (e.key === "2") input.mode2 = true;
+    if (e.key === "c") input.camera = true;
+    if (e.key === "t") input.type = true;
   });
 
   document.addEventListener("keyup", (e) => {
@@ -194,6 +199,11 @@ export function listenToKeyboard(input) {
     if (e.key === "ArrowLeft") input.left = false;
     if (e.key === "ArrowUp") input.up = false;
     if (e.key === "ArrowDown") input.down = false;
+    if (e.key === "r") input.reset = false;
+    if (e.key === "1") input.mode1 = false;
+    if (e.key === "2") input.mode2 = false;
+    if (e.key === "c") input.camera = false;
+    if (e.key === "t") input.type = false;
   });
 }
 
@@ -251,3 +261,7 @@ export function getNormalAngleRad(normal) {
   // return 90 - slopeDegrees;
   return angleToUp;
 }
+
+// function getHeight() {
+//   return Math.sin(this.angleRad) * this._length;
+// }

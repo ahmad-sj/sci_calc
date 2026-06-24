@@ -35,14 +35,14 @@ export class Ground {
     this.mesh.rotation.x = Math.PI * -0.5;
     this._position = this.mesh.position;
 
-    this.update();
+    this.updateBounds();
   }
 
   addToScene(scene) {
     scene.add(this.mesh);
   }
 
-  update() {
+  updateBounds() {
     // Update the min and max values
     this._minX = this._position.x - this._size / 2;
     this._maxX = this._position.x + this._size / 2;

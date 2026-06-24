@@ -1,47 +1,23 @@
 import * as THREE from "three";
-import { getNormalAngleRad } from "../helpers.js";
+import { MyQuat } from "./MyQuat.js";
 
 export class Slope {
   _position = new THREE.Vector3(0, 0, 0);
   _width;
   _length;
   _height;
-  _angle;
 
-  constructor(position, width, length, groundY, normal) {
+  _orientation = new MyQuat();
+
+  constructor(position, width, length, normal) {
     this._width = width;
     this._length = length;
-
     this._position = position.clone();
-    // this._normal = new THREE.Vector3(0, 0.94, 0.342).normalize();
     this._normal = normal.clone();
 
-    // Calculate plane equation: Ax + By + Cz + D = 0
-    this.A = this.normal.x;
-    this.B = this.normal.y;
-    this.C = this.normal.z;
-    this.D = -this.normal.dot(this._position);
-
-    // this._position.y -= this._position.y - groundY;
-    // this._position.y += this._height / 2;
-
-    this._minX = position.x - this._width / 2;
-    this._maxX = position.x + this._width / 2;
-
-    this._minY = position.y - this._height / 2;
-    this._maxY = position.y + this._height / 2;
-
-    this._minZ = position.z - this._length / 2;
-    this._maxZ = position.z + this._length / 2;
-
-    const textureLoader = new THREE.TextureLoader();
-    const texture = textureLoader.load("static/textures/slope.jpg");
-
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.magFilter = THREE.NearestFilter;
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.repeat.set(width / 2, length / 2);
+    this.setPlaneEquation(normal);
+    this.setBounds(position, width, length);
+    const texture = this.configTexture(this._width, this._length);
 
     this.geometry = new THREE.PlaneGeometry(width, length);
     this.material = new THREE.MeshBasicMaterial({
@@ -52,10 +28,40 @@ export class Slope {
 
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.position.copy(this._position);
-    // this.mesh.rotation.x = -1 * ((Math.PI * 70) / 180);
 
-    this.geometry.lookAt(this._normal);
+    this.orientation.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+    this.updateMesh();
+
     this._position = this.mesh.position;
+  }
+
+  // Calculate plane equation: Ax + By + Cz + D = 0
+  setPlaneEquation(slopeNormal) {
+    this.A = slopeNormal.x;
+    this.B = slopeNormal.y;
+    this.C = slopeNormal.z;
+    this.D = -slopeNormal.dot(this._position);
+  }
+
+  setBounds(slopePosition, slopeWidth, slopeLength) {
+    this._minX = slopePosition.x - slopeWidth / 2;
+    this._maxX = slopePosition.x + slopeWidth / 2;
+
+    this._minZ = slopePosition.z - slopeLength / 2;
+    this._maxZ = slopePosition.z + slopeLength / 2;
+  }
+
+  configTexture(slopeWidth, slopeLength) {
+    const textureLoader = new THREE.TextureLoader();
+    const texture = textureLoader.load("static/textures/slope.jpg");
+
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.magFilter = THREE.NearestFilter;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.repeat.set(slopeWidth / 2, slopeLength / 2);
+
+    return texture;
   }
 
   addToScene(scene) {
@@ -66,6 +72,10 @@ export class Slope {
     return this._position;
   }
 
+  set position(vector) {
+    this._position = vector.clone();
+  }
+
   get normal() {
     return this._normal;
   }
@@ -74,27 +84,82 @@ export class Slope {
     this._normal = vector.clone();
   }
 
-  get angleRad() {
-    return getNormalAngleRad(this._normal);
+  get orientation() {
+    return this._orientation;
   }
 
-  get height() {
-    return Math.sin(this.angleRad) * this._length;
+  set orientation(myQuat) {
+    this._orientation = myQuat;
   }
 
   // Get height at given X,Z position
   getHeightAt(x, z) {
-    if (this.B === 0) return this.point.y; // Vertical plane
+    if (this.B === 0) return 100000; // Vertical plane
     return -(this.A * x + this.C * z + this.D) / this.B;
   }
 
-  // Check if point is within slope bounds
-  containsPoint(x, z) {
-    const localX = x - this._position.x;
-    const localZ = z - this._position.z;
+  // rotate slope with keyboard input
+  rotate(input) {
+    let rotationSpeed = 0.01;
+
+    if (input.right) {
+      this.orientation.rotateOnAxis(new THREE.Vector3(0, 1, 0), rotationSpeed);
+      this.updateOrientation();
+    }
+    if (input.left) {
+      this.orientation.rotateOnAxis(new THREE.Vector3(0, 1, 0), -rotationSpeed);
+      this.updateOrientation();
+    }
+    if (input.up) {
+      this.orientation.rotateOnAxis(new THREE.Vector3(1, 0, 0), -rotationSpeed);
+      this.updateOrientation();
+    }
+    if (input.down) {
+      this.orientation.rotateOnAxis(new THREE.Vector3(1, 0, 0), rotationSpeed);
+      this.updateOrientation();
+    }
+  }
+
+  // Apply the rotation of the orientation to get the world normal
+  updateNormal() {
+    const defaultNormal = new THREE.Vector3(0, 0, 1);
+
+    const rotatedNormal = this.orientation.rotateVector(defaultNormal);
+    this._normal = rotatedNormal.normalize();
+
+    // update plane equation after rotation
+    this.setPlaneEquation(this._normal);
+  }
+
+  updateMesh() {
+    this.mesh.quaternion.set(
+      this.orientation.x,
+      this.orientation.y,
+      this.orientation.z,
+      this.orientation.w,
+    );
+  }
+
+  updateOrientation() {
+    this.updateMesh();
+    this.updateNormal();
+  }
+
+  reset() {
+    this._normal.set(0, 1, 0);
+    this.setPlaneEquation(this._normal);
+
+    this.orientation.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+    this.updateMesh();
+  }
+
+  // Check if ball is within slope bounds
+  contains(ball) {
     return (
-      Math.abs(localX) <= this._width / 2 &&
-      Math.abs(localZ) <= this._length / 2
+      ball.position.x >= this._minX - ball.radius &&
+      ball.position.x <= this._maxX + ball.radius &&
+      ball.position.z >= this._minZ + ball.radius &&
+      ball.position.z <= this._maxZ - ball.radius
     );
   }
 }
