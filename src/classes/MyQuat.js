@@ -101,4 +101,10 @@ export class MyQuat {
       iz * qw + iw * -qz + ix * -qy - iy * -qx,
     );
   }
+
+  rotateOnAxis(axis, angle) {
+    const rotation = new MyQuat().setFromAxisAngle(axis, angle);
+
+    return this.multiply(rotation);
+  }
 }

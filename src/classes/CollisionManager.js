@@ -20,7 +20,6 @@ export class CollisionManager {
     const slope = this._items["slope"];
 
     // console.log("angle", THREE.MathUtils.radToDeg(Math.acos(slope.normal.y)));
-    // console.log("slope normal", slope.normal);
 
     // Get theoretical ground height at ball's center (X,Z)
     const slopeY = slope.getHeightAt(ball.position.x, ball.position.z);
@@ -33,7 +32,6 @@ export class CollisionManager {
       // if ball is above slope surface
       if (distanceToSurface >= 0) {
         this.forceManager.updateGravity(new THREE.Vector3(0, 1, 0));
-        // console.log("distance greater than 0: ", distanceToSurface);
         return true;
       }
 

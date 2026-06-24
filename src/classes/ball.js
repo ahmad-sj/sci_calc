@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { loadSRGBTexture } from "../helpers.js";
+import { MyQuat } from "./MyQuat.js";
 
 export class Ball {
   _radius = 1;
@@ -12,6 +13,7 @@ export class Ball {
   _angularVelocity = 0;
   _groundY = 0;
 
+  _orientation = new MyQuat();
   _contactNormal = new THREE.Vector3(0, 1, 0);
 
   // ==================================================
@@ -157,6 +159,14 @@ export class Ball {
     return this._type;
   }
 
+  get orientation() {
+    return this._orientation;
+  }
+
+  set orientation(myQuat) {
+    this._orientation = myQuat;
+  }
+
   // ==================================================
   rotate(axis, angle) {
     this.mesh.rotateOnAxis(axis, angle);
@@ -165,9 +175,21 @@ export class Ball {
   reset() {
     this.linearVelocity.set(0, 0, 0);
     this.angularVelocity = 0;
-    this.mesh.quaternion.identity();
+
+    this.orientation.identity();
+    this.updateMesh(this.orientation);
+
     this.position.set(0, 10, 0);
     this.mass = 1;
     this.contactNormal.set(0, 1, 0);
+  }
+
+  updateMesh() {
+    this.mesh.quaternion.set(
+      this.orientation.x,
+      this.orientation.y,
+      this.orientation.z,
+      this.orientation.w,
+    );
   }
 }

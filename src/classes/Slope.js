@@ -1,11 +1,13 @@
 import * as THREE from "three";
-import { getNormalAngleRad } from "../helpers.js";
+import { MyQuat } from "./MyQuat.js";
 
 export class Slope {
   _position = new THREE.Vector3(0, 0, 0);
   _width;
   _length;
   _height;
+
+  _orientation = new MyQuat();
 
   constructor(position, width, length, normal) {
     this._width = width;
@@ -26,7 +28,9 @@ export class Slope {
 
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.position.copy(this._position);
-    this.mesh.rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+
+    this.orientation.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+    this.updateMesh();
 
     this._position = this.mesh.position;
   }
@@ -80,6 +84,14 @@ export class Slope {
     this._normal = vector.clone();
   }
 
+  get orientation() {
+    return this._orientation;
+  }
+
+  set orientation(myQuat) {
+    this._orientation = myQuat;
+  }
+
   // Get height at given X,Z position
   getHeightAt(x, z) {
     if (this.B === 0) return 100000; // Vertical plane
@@ -91,38 +103,54 @@ export class Slope {
     let rotationSpeed = 0.01;
 
     if (input.right) {
-      this.mesh.rotateOnAxis(new THREE.Vector3(0, 1, 0), rotationSpeed);
-      this.updateNormal();
+      this.orientation.rotateOnAxis(new THREE.Vector3(0, 1, 0), rotationSpeed);
+      this.updateOrientation();
     }
     if (input.left) {
-      this.mesh.rotateOnAxis(new THREE.Vector3(0, 1, 0), -rotationSpeed);
-      this.updateNormal();
+      this.orientation.rotateOnAxis(new THREE.Vector3(0, 1, 0), -rotationSpeed);
+      this.updateOrientation();
     }
     if (input.up) {
-      this.mesh.rotateOnAxis(new THREE.Vector3(1, 0, 0), -rotationSpeed);
-      this.updateNormal();
+      this.orientation.rotateOnAxis(new THREE.Vector3(1, 0, 0), -rotationSpeed);
+      this.updateOrientation();
     }
     if (input.down) {
-      this.mesh.rotateOnAxis(new THREE.Vector3(1, 0, 0), rotationSpeed);
-      this.updateNormal();
+      this.orientation.rotateOnAxis(new THREE.Vector3(1, 0, 0), rotationSpeed);
+      this.updateOrientation();
     }
   }
 
+  // Apply the rotation of the orientation to get the world normal
   updateNormal() {
-    // Apply the rotation of the mesh to get the world normal
     const defaultNormal = new THREE.Vector3(0, 0, 1);
-    defaultNormal.applyQuaternion(this.mesh.quaternion);
-    this._normal = defaultNormal.normalize();
+
+    const rotatedNormal = this.orientation.rotateVector(defaultNormal);
+    this._normal = rotatedNormal.normalize();
 
     // update plane equation after rotation
     this.setPlaneEquation(this._normal);
   }
 
+  updateMesh() {
+    this.mesh.quaternion.set(
+      this.orientation.x,
+      this.orientation.y,
+      this.orientation.z,
+      this.orientation.w,
+    );
+  }
+
+  updateOrientation() {
+    this.updateMesh();
+    this.updateNormal();
+  }
+
   reset() {
     this._normal.set(0, 1, 0);
     this.setPlaneEquation(this._normal);
-    this.mesh.quaternion.identity();
-    this.mesh.rotateOnAxis(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+
+    this.orientation.setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+    this.updateMesh();
   }
 
   // Check if ball is within slope bounds
