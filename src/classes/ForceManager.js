@@ -7,6 +7,7 @@ export class ForceManager {
   _g = 9.81; // gravity acceleration
   _c_rr = 0.05; // rolling resistance coefficient
   _mu = 0.05; // sliding friction coefficient
+  _normalForceMagnitude = 0; // قيمة القوة الطبيعية لاستخدامها في حساب الاحتكاك
 
   // moving mode (true by tilting, false by moving)
   _mode = false;
@@ -64,6 +65,36 @@ export class ForceManager {
 
   removeGravity() {
     this.remove("gravity");
+  }
+
+  /**
+   * حساب مقدار القوة الطبيعية وتخزينه لاستخدامه في قوى الاحتكاك
+   * @param {THREE.Vector3} surfaceNormal - ناظم السطح الحالي
+   * @param {boolean} isGrounded - هل الكرة تلامس السطح؟
+   */
+  updateNormalForce(surfaceNormal, isGrounded) {
+    // إذا كانت الكرة في الهواء، القوة الطبيعية تنعدم فوراً
+    if (!isGrounded) {
+      this._normalForceMagnitude = 0;
+      return;
+    }
+
+    // جلب الكتلة والجاذبية من المتغيرات الأصلية للكلاس
+    const m = this._target.mass;
+    const g = this._g;
+
+    // حساب زاوية الميلان باستخدام الضرب النقطي (Dot Product)
+    const upVector = new THREE.Vector3(0, 1, 0);
+    const cosTheta = surfaceNormal.dot(upVector);
+
+    // القانون الفيزيائي: N = m * g * cos(theta)
+    // نضمن أن القيمة لا تنزل تحت الصفر بأي حال
+    this._normalForceMagnitude = Math.max(0, m * g * cosTheta);
+  }
+
+  // كرمال نستدعي قيمة القوة الطبيعية بسهولة بكود الاحتكاك
+  get normalForceMagnitude() {
+    return this._normalForceMagnitude;
   }
 
   update(input, dt) {
