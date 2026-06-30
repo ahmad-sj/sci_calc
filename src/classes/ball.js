@@ -115,6 +115,18 @@ export class Ball {
   }
 
   // ==================================================
+  // 4.2 عزم القصور الذاتي الدوراني (Moment of Inertia)
+  // I = (2/5) * m * r^2  -> صيغة الكرة الصلبة المتجانسة بالضبط متل الصورة
+  get momentOfInertia() {
+    return (2 / 5) * this._mass * this._radius * this._radius;
+  }
+
+  // كمية الحركة الدورانية (Angular Momentum): L = I * ω
+  get angularMomentum() {
+    return this.momentOfInertia * this._angularVelocity;
+  }
+
+  // ==================================================
   get contactNormal() {
     return this._contactNormal;
   }
@@ -144,7 +156,7 @@ export class Ball {
       case "paper": {
         this._mass = 0.75;
         // الورق خفيف جداً وسطحه واسع نسبياً لوزنه -> الهواء بيأثر فيه كتير
-        this._dragCoefficient = 0.45;
+        this._dragCoefficient = 0.08;
         // الورق يلين/يمتص جزء من الصدمة -> تأثير أضعف عالصندوق حتى لو نفس السرعة
         this._impactForceMultiplier = 0.4;
         break;
@@ -152,7 +164,7 @@ export class Ball {
       case "stone": {
         this._mass = 3;
         // الحجر ثقيل وكثيف -> الهواء بالكاد يأثر فيه
-        this._dragCoefficient = 0.02;
+        this._dragCoefficient = 0.005;
         // الحجر صلب وما بيمتص طاقة -> ينقل الصدمة كاملة (وأكتر) عالصندوق
         this._impactForceMultiplier = 1.4;
         break;
@@ -160,7 +172,7 @@ export class Ball {
       case "wood": {
         this._mass = 1.5;
         // الخشب بالوسط بين التانيين
-        this._dragCoefficient = 0.15;
+        this._dragCoefficient = 0.03;
         this._impactForceMultiplier = 1;
         break;
       }
@@ -222,7 +234,6 @@ export class Ball {
     );
   }
 }
-
 
 /*import * as THREE from "three";
 import { loadSRGBTexture } from "../helpers.js";

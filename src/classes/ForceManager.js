@@ -5,7 +5,9 @@ export class ForceManager {
   _target;
   _forces = {};
   _g = 9.81; // تسارع الجاذبية الأرضية
-  _c_rr = 0.05; // معامل الاحتكاك الدوراني (Rolling Resistance Coefficient)
+  _c_rr = 0.015; // معامل الاحتكاك الدوراني (Rolling Resistance Coefficient)
+  // ملاحظة: بعد ربط الحساب بصيغة τ=Iα (حيث I=(2/5)mr²)، الناتج الفعلي = (5/2)·c_rr·N
+  // يعني القيمة الفعلية المؤثرة أكبر 2.5 ضعف من c_rr نفسها، لهيك خفّضنا القيمة الافتراضية
   _mu = 0.3; // معامل الاحتكاك الانزلاقي (Sliding Friction Coefficient) - بيصير اكبر من الدوراني عادة
 
   // وضع التحريك (true = تمييل السطح، false = دفع مباشر)
@@ -107,7 +109,30 @@ export class ForceManager {
 
     const direction = linVel.clone().normalize();
 
-    return direction.negate().multiplyScalar(this._c_rr * normalForceMagnitude);
+    // ==================================================
+    // تطبيق فعلي لمفهوم القصور الذاتي الدوراني (الصورة - البند 2.4):
+    //
+    // 1) قوة مقاومة الدحرجة عند نقطة التماس (Contact Point)
+    const rollingResistanceForce = this._c_rr * normalForceMagnitude;
+
+    // 2) هاي القوة بتولّد عزم دوران (Torque) حول مركز الكرة
+    //    ذراع العزم = نصف القطر (نقطة التماس عَ سطح الكرة)
+    //    τ = F × r
+    const torque = rollingResistanceForce * ball.radius;
+
+    // 3) التباطؤ الزاوي الحقيقي حسب عزم القصور الذاتي
+    //    τ = I·α  =>  α = τ / I
+    //    وI هون محسوبة فعلياً من I = (2/5)·m·r² (صيغة الكرة الصلبة بالصورة)
+    const angularDeceleration = torque / ball.momentOfInertia;
+
+    // 4) تحويل التباطؤ الزاوي لتباطؤ خطي مكافئ
+    //    بشرط التدحرج بدون انزلاق (Rolling Without Slipping): v = ω·r  =>  a = α·r
+    const linearDecelerationMagnitude = angularDeceleration * ball.radius;
+
+    // القوة المكافئة المطبقة عَ مركز كتلة الكرة (F = m·a)
+    const dragMagnitude = ball.mass * linearDecelerationMagnitude;
+
+    return direction.negate().multiplyScalar(dragMagnitude);
   }
 
   // ==================================================
@@ -258,158 +283,3 @@ export class ForceManager {
     this._isSlidingOnBox = false;
   }
 }
-
-
-/*import * as THREE from "three";
-import { MyQuat } from "./MyQuat";
-
-export class ForceManager {
-  _target;
-  _forces = {};
-  _g = 9.81; // gravity acceleration
-  _c_rr = 0.05; // rolling resistance coefficient
-  _mu = 0.05; // sliding friction coefficient
-
-  // moving mode (true by tilting, false by moving)
-  _mode = false;
-
-  set target(item) {
-    this._target = item;
-  }
-
-  get target() {
-    return this._target;
-  }
-
-  get g() {
-    return this._g;
-  }
-
-  get mode() {
-    return this._mode;
-  }
-
-  set mode(boolean) {
-    this._mode = boolean;
-  }
-
-  add(force) {
-    this._forces[Object.keys(force)[0]] = Object.values(force)[0];
-  }
-
-  getForce(forceName) {
-    return this._forces[forceName];
-  }
-
-  remove(forceName) {
-    delete this._forces[forceName];
-  }
-
-  updateGravity(normal) {
-    // Fg = (m.g.sin(theta)).i^ - (m.g.cos(theta)).j^
-
-    const target = this._target;
-
-    const globalGravity = new THREE.Vector3(0, -this.g * target.mass, 0);
-
-    if (normal.x === 0 && normal.y === 1 && normal.z === 0) {
-      this.add({ gravity: globalGravity });
-      return;
-    }
-
-    const Fg_down = normal.clone().multiplyScalar(globalGravity.dot(normal));
-
-    const Fg_parallel = globalGravity.clone().sub(Fg_down);
-
-    this.add({ gravity: Fg_parallel });
-  }
-
-  removeGravity() {
-    this.remove("gravity");
-  }
-
-  update(input, dt) {
-    const totalForce = new THREE.Vector3(0, 0, 0);
-
-    const ball = this._target;
-    const linVel = ball.linearVelocity;
-
-    const moveForce = 20;
-    const inputForce = new THREE.Vector3();
-
-    if (this.mode === true) {
-      if (input.right) inputForce.x += moveForce;
-      if (input.left) inputForce.x -= moveForce;
-      if (input.up) inputForce.z -= moveForce;
-      if (input.down) inputForce.z += moveForce;
-    }
-
-    const normal = ball._mass * this._g;
-
-    if (linVel.length() > 0) {
-      const dir = linVel.clone().normalize();
-
-      // ==================================================
-      // Rolling Resistance
-      const rollingResistance = dir
-        .clone()
-        .negate()
-        .multiplyScalar(this._c_rr * normal);
-
-      // ==================================================
-      // Sliding friction
-      const slidingFriction = dir
-        .clone()
-        .negate()
-        .multiplyScalar(this._mu * normal);
-
-      totalForce.add(rollingResistance);
-      totalForce.add(slidingFriction);
-
-      // ==================================================
-      // Air friction
-    }
-
-    // ==================================================
-    // Input force
-    totalForce.add(inputForce);
-
-    // ==================================================
-    // dynamically added forces
-    const forcesKeys = Object.keys(this._forces);
-
-    forcesKeys.forEach((key) => {
-      totalForce.add(this._forces[key]);
-    });
-
-    // ==================================================
-    // Acceleration
-    const acceleration = totalForce.clone().divideScalar(ball.mass);
-
-    linVel.add(acceleration.multiplyScalar(dt));
-
-    ball.position.add(linVel.clone().multiplyScalar(dt));
-
-    // ==================================================
-    // Ball rotation
-    if (linVel.length() > 0.0001) {
-      // 1. Calculate the physical world axis of rotation
-      const axis = new THREE.Vector3()
-        .crossVectors(linVel.clone().normalize(), ball.contactNormal)
-        .normalize();
-
-      // 2. Calculate angular speed and delta angle
-      ball.angularVelocity = linVel.length() / ball.radius;
-      const angleDelta = ball.angularVelocity * dt;
-
-      // 3. Create a quaternion representing ONLY this frame's rotation step
-      const rotationStep = new MyQuat().setFromAxisAngle(axis, -angleDelta);
-
-      // 4. Pre-multiply to apply the rotation around the global world axis
-      ball.orientation.premultiply(rotationStep);
-      ball.orientation.normalize();
-      ball.updateMesh();
-    }
-  }
-}
-*/

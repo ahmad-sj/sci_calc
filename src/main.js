@@ -127,6 +127,10 @@ ballFolder
     updateAllGuiDisplays(gui);
   });
 
+// عرض حي لعزم القصور الذاتي وكمية الحركة الدورانية (تتحدث تلقائياً كل فريم)
+ballFolder.add(ball, "momentOfInertia").name("I (Moment of Inertia)").disable().listen();
+ballFolder.add(ball, "angularMomentum").name("L = I·ω").disable().listen();
+
 // ==================================================
 // force manager
 const forceManager = new ForceManager();
@@ -253,7 +257,6 @@ function animate(time) {
 }
 
 renderer.setAnimationLoop(animate);
-
 /*import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { Timer } from "three";
