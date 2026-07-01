@@ -5,8 +5,9 @@ export class ForceManager {
   _target;
   _forces = {};
   _g = 9.81; // gravity acceleration
-  _c_rr = 0.05; // rolling resistance coefficient
-  _mu = 0.05; // sliding friction coefficient
+  _c_rr = 0.003; // rolling resistance coefficient
+  _mu_flat = 0.30; // sliding friction coefficient
+  _mu_slope = 0.10;//معامل الاحتكاك على منحدر مائل
   _normalForceMagnitude = 0; // قيمة القوة الطبيعية لاستخدامها في حساب الاحتكاك
 
   // moving mode (true by tilting, false by moving)
@@ -97,6 +98,67 @@ export class ForceManager {
     return this._normalForceMagnitude;
   }
 
+  /**
+   * 1.3 حساب وتطبيق قوة الاحتكاك الانزلاقي (Sliding Friction)
+   * الصيغة الشعاعية: F_k = -mu_k * N * v_hat
+   */
+  updateSlidingFriction(isOnSlope = false) {
+    // جلب سرعة الكرة الخطية الحالية
+    const velocity = this._target.linearVelocity;
+
+    // إذا كانت القوة الطبيعية صفر (بالهواء) أو الكرة ساكنة، لا يوجد احتكاك
+    if (this._normalForceMagnitude === 0 || velocity.lengthSq() < 0.0001) {
+      this.remove("slidingFriction");
+      return;
+    }
+
+    // حساب متجه وحدة اتجاه الحركة: v_hat = v / |v|
+    const vHat = velocity.clone().normalize();
+
+    const mu = isOnSlope ? this._mu_slope : this._mu_flat;
+    // تطبيق الصيغة الشعاعية: F_k = -mu_k * N * v_hat
+    const frictionForce = vHat.multiplyScalar(-mu * this._normalForceMagnitude);
+
+    // إضافة القوة لقائمة القوى
+    this.add({ slidingFriction: frictionForce });
+  }
+
+  /**
+   * 2.3 حساب وتطبيق الاحتكاك الدوراني (Rolling Friction) والعزم المقاوم
+   * الصيغة: tau_f = -mu_r * N * R * omega_hat
+   */
+  updateRollingFriction() {
+    // جلب السرعة الزاوية (رقم scalar بالكود الأصلي)
+    const angularSpeed = this._target.angularVelocity;
+
+    // إذا كانت القوة الطبيعية صفر أو الكرة لا تدور، لا يوجد احتكاك دوراني
+    if (this._normalForceMagnitude === 0 || Math.abs(angularSpeed) < 0.0001) {
+      this.remove("rollingFriction");
+      return;
+    }
+
+    // جلب نصف قطر الكرة
+    const r = this._target.radius;
+
+    // 1. حساب مقدار العزم المقاوم: |tau| = mu_r * N * R
+    const torqueMagnitude = this._c_rr * this._normalForceMagnitude * r;
+
+    // 2. حساب محور الدوران (omega_hat) من السرعة الخطية وناظم السطح
+    // omega_hat = (v × contactNormal) / |v × contactNormal|
+    const linVel = this._target.linearVelocity;
+    const omegaHat = new THREE.Vector3()
+      .crossVectors(linVel.clone().normalize(), this._target.contactNormal)
+      .normalize();
+
+    // 3. العزم المقاوم: tau_f = -torqueMagnitude * omega_hat
+    const resistiveTorque = omegaHat.multiplyScalar(-torqueMagnitude);
+
+    // 4. تحويل العزم إلى قوة خطية مكافئة وإضافتها للقوى
+    // F = tau / r
+    const equivalentForce = resistiveTorque.clone().divideScalar(r);
+    this.add({ rollingFriction: equivalentForce });
+  }
+
   update(input, dt) {
     const totalForce = new THREE.Vector3(0, 0, 0);
 
@@ -113,31 +175,6 @@ export class ForceManager {
       if (input.down) inputForce.z += moveForce;
     }
 
-    const normal = ball._mass * this._g;
-
-    if (linVel.length() > 0) {
-      const dir = linVel.clone().normalize();
-
-      // ==================================================
-      // Rolling Resistance
-      const rollingResistance = dir
-        .clone()
-        .negate()
-        .multiplyScalar(this._c_rr * normal);
-
-      // ==================================================
-      // Sliding friction
-      const slidingFriction = dir
-        .clone()
-        .negate()
-        .multiplyScalar(this._mu * normal);
-
-      totalForce.add(rollingResistance);
-      totalForce.add(slidingFriction);
-
-      // ==================================================
-      // Air friction
-    }
 
     // ==================================================
     // Input force

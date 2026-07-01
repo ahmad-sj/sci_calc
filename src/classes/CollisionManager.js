@@ -76,7 +76,8 @@ export class CollisionManager {
       // if ball is above slope surface
       if (distanceToSurface >= 0) {
         this.forceManager.updateGravity(new THREE.Vector3(0, 1, 0));
-        return true;
+        // الكرة فوق السطح بدون تلامس -> ليست على الأرض
+        return false;
       }
 
       // if ball is below slope surface
@@ -91,6 +92,8 @@ export class CollisionManager {
         if (slope.normal.x == 0 && slope.normal.y == 1 && slope.normal.z == 0) {
           this.forceManager.removeGravity();
           this.correctPositionOnSlope(ball, slope, distanceToSurface);
+          // تلامس مع منحدر مسطح -> القوة الطبيعية = (0,1,0)
+          ball.contactNormal = new THREE.Vector3(0, 1, 0);
           return true;
         }
 
@@ -98,6 +101,7 @@ export class CollisionManager {
         ball.contactNormal = slope.normal;
         this.forceManager.updateGravity(slope.normal);
         this.correctPositionOnSlope(ball, slope, distanceToSurface);
+        // تلامس مع منحدر مائل
         return true;
       }
     }
@@ -122,18 +126,33 @@ export class CollisionManager {
       }
     }
 
-    const onSlope = this.checkSlopeCollision();
-
+    // هل الكرة تلامس سطحاً (أرضاً أو منحدراً)؟
+    let isGrounded = this.checkSlopeCollision();
+    let isOnSlope = false;
     const targetGroundY = ground._position.y + ball.radius;
 
-    if (!onSlope) {
+    if (!isGrounded) {
       this.forceManager.updateGravity(new THREE.Vector3(0, 1, 0));
     }
+
+
+
 
     if (ball.position.y < targetGroundY) {
       forceManager.removeGravity();
       ball.position.y = targetGroundY;
       ball.contactNormal = new THREE.Vector3(0, 1, 0);
+      // تلامس مع الأرض العادية
+      isGrounded = true;
+      isOnSlope = false;
+    }else if (isGrounded) {
+      const normal = ball.contactNormal;
+      isOnSlope = !(normal.x === 0 && normal.y === 1 && normal.z === 0);
     }
+
+    // ربط القوة الطبيعية والاحتكاك بحالة التلامس الفعلية
+    forceManager.updateNormalForce(ball.contactNormal, isGrounded);
+    forceManager.updateSlidingFriction(isOnSlope);
+    forceManager.updateRollingFriction();
   }
 }
