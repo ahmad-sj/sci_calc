@@ -102,6 +102,10 @@ export class ForceManager {
   // قوة الاحتكاك الدوراني (Rolling Friction)
   // بتصير لما الكرة عم "تتدحرج" بشكل طبيعي على الأرض/المنحدر (بدون ملامسة صندوق)
   // الصيغة: F_rr = - c_rr * N * (اتجاه الحركة)
+  //
+  // ملاحظة فيزيائية مهمة:
+  // I تلغي نفسها رياضياً عند تطبيقها على احتكاك الدحرجة — النتيجة دائماً F = c_rr * N
+  // تأثير I الحقيقي والملموس يظهر داخل updateLinearMotion عبر effectiveMass = (7/5)·m
   calculateRollingFriction(ball, normalForceMagnitude) {
     const linVel = ball.linearVelocity;
 
@@ -109,30 +113,7 @@ export class ForceManager {
 
     const direction = linVel.clone().normalize();
 
-    // ==================================================
-    // تطبيق فعلي لمفهوم القصور الذاتي الدوراني (الصورة - البند 2.4):
-    //
-    // 1) قوة مقاومة الدحرجة عند نقطة التماس (Contact Point)
-    const rollingResistanceForce = this._c_rr * normalForceMagnitude;
-
-    // 2) هاي القوة بتولّد عزم دوران (Torque) حول مركز الكرة
-    //    ذراع العزم = نصف القطر (نقطة التماس عَ سطح الكرة)
-    //    τ = F × r
-    const torque = rollingResistanceForce * ball.radius;
-
-    // 3) التباطؤ الزاوي الحقيقي حسب عزم القصور الذاتي
-    //    τ = I·α  =>  α = τ / I
-    //    وI هون محسوبة فعلياً من I = (2/5)·m·r² (صيغة الكرة الصلبة بالصورة)
-    const angularDeceleration = torque / ball.momentOfInertia;
-
-    // 4) تحويل التباطؤ الزاوي لتباطؤ خطي مكافئ
-    //    بشرط التدحرج بدون انزلاق (Rolling Without Slipping): v = ω·r  =>  a = α·r
-    const linearDecelerationMagnitude = angularDeceleration * ball.radius;
-
-    // القوة المكافئة المطبقة عَ مركز كتلة الكرة (F = m·a)
-    const dragMagnitude = ball.mass * linearDecelerationMagnitude;
-
-    return direction.negate().multiplyScalar(dragMagnitude);
+    return direction.negate().multiplyScalar(this._c_rr * normalForceMagnitude);
   }
 
   // ==================================================
@@ -185,7 +166,11 @@ export class ForceManager {
   // v = v0 + a*dt
   // x = x0 + v*dt
   updateLinearMotion(ball, totalForce, dt) {
-    const acceleration = totalForce.clone().divideScalar(ball.mass);
+    // الكتلة الفعّالة = m + I/r² = (7/5)·m
+    // هون يظهر تأثير القصور الذاتي الدوراني (I) فعلياً:
+    // نفس القوة تعطي تسارعاً أقل للكرة الحجرية (effectiveMass أكبر)
+    // مقارنةً بالكرة الورقية (effectiveMass أصغر)
+    const acceleration = totalForce.clone().divideScalar(ball.effectiveMass);
 
     const linVel = ball.linearVelocity;
     linVel.add(acceleration.multiplyScalar(dt));
