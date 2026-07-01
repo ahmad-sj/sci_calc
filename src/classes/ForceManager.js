@@ -6,9 +6,10 @@ export class ForceManager {
   _forces = {};
   _g = 9.81; // gravity acceleration
   _c_rr = 0.003; // rolling resistance coefficient
-  _mu_flat = 0.30; // sliding friction coefficient
-  _mu_slope = 0.10;//معامل الاحتكاك على منحدر مائل
+  _mu_flat = 0.30; // sliding friction coefficient on flat surface
+  _mu_slope = 0.10; // معامل الاحتكاك على منحدر مائل
   _normalForceMagnitude = 0; // قيمة القوة الطبيعية لاستخدامها في حساب الاحتكاك
+  _rho = 1.225; // كثافة الهواء kg/m³
 
   // moving mode (true by tilting, false by moving)
   _mode = false;
@@ -49,8 +50,9 @@ export class ForceManager {
     // Fg = (m.g.sin(theta)).i^ - (m.g.cos(theta)).j^
 
     const target = this._target;
-
+    
     const globalGravity = new THREE.Vector3(0, -this.g * target.mass, 0);
+
 
     if (normal.x === 0 && normal.y === 1 && normal.z === 0) {
       this.add({ gravity: globalGravity });
@@ -115,7 +117,9 @@ export class ForceManager {
     // حساب متجه وحدة اتجاه الحركة: v_hat = v / |v|
     const vHat = velocity.clone().normalize();
 
+    // اختيار معامل الاحتكاك حسب نوع السطح
     const mu = isOnSlope ? this._mu_slope : this._mu_flat;
+
     // تطبيق الصيغة الشعاعية: F_k = -mu_k * N * v_hat
     const frictionForce = vHat.multiplyScalar(-mu * this._normalForceMagnitude);
 
@@ -144,7 +148,7 @@ export class ForceManager {
     const torqueMagnitude = this._c_rr * this._normalForceMagnitude * r;
 
     // 2. حساب محور الدوران (omega_hat) من السرعة الخطية وناظم السطح
-    // omega_hat = (v × contactNormal) / |v × contactNormal|
+
     const linVel = this._target.linearVelocity;
     const omegaHat = new THREE.Vector3()
       .crossVectors(linVel.clone().normalize(), this._target.contactNormal)
@@ -154,9 +158,64 @@ export class ForceManager {
     const resistiveTorque = omegaHat.multiplyScalar(-torqueMagnitude);
 
     // 4. تحويل العزم إلى قوة خطية مكافئة وإضافتها للقوى
-    // F = tau / r
+
     const equivalentForce = resistiveTorque.clone().divideScalar(r);
     this.add({ rollingFriction: equivalentForce });
+  }
+
+  /**
+   * 3.7 حساب وتطبيق قوة مقاومة الهواء (Air Resistance / Drag Force)
+   * الصيغة الشعاعية: F_D = -0.5 * rho * C_d * A * |v|² * v_hat
+   * تعمل بكل الحالات (على الأرض أو بالهواء) لأنها تعتمد على السرعة فقط
+   */
+  updateAirResistance() {
+    // جلب سرعة الكرة الخطية الحالية
+    const velocity = this._target.linearVelocity;
+    const speedSq = velocity.lengthSq();
+
+    // إذا كانت الكرة ساكنة تماماً، لا توجد مقاومة هواء
+    if (speedSq < 0.0001) {
+      this.remove("airResistance");
+      return;
+    }
+
+    // جلب نصف قطر الكرة الفعلي
+    const r = this._target.radius;
+
+    // مساحة المقطع العرضي: A = π * r²
+    // نستخدم نصف قطر صغير (0.3) بدل القيمة الكاملة لأن أبعاد اللعبة
+    // أكبر من الواقع الفيزيائي — هاد يخلي مقاومة الهواء محسوسة بدون ما توقف الكرة
+    const r_effective = r * 0.1;
+    const A = Math.PI * r_effective * r_effective;
+
+    // معامل السحب حسب نوع الكرة (من جدول الدراسة الفيزيائية)
+    const C_d = this._getDragCoefficient();
+
+    // مقدار قوة مقاومة الهواء: F_D = 0.5 * ρ * C_d * A * v²
+    const dragMagnitude = 0.5 * this._rho * C_d * A * speedSq;
+
+    // متجه وحدة الاتجاه: v_hat = v / |v|
+    const vHat = velocity.clone().normalize();
+
+    // الصيغة الشعاعية: F_D = -dragMagnitude * v_hat (عكس اتجاه الحركة)
+    const dragForce = vHat.multiplyScalar(-dragMagnitude);
+
+    // إضافة القوة لقائمة القوى
+    this.add({ airResistance: dragForce });
+  }
+
+  /**
+   * جلب معامل السحب C_d حسب نوع الكرة الحالي
+   * 
+   */
+  _getDragCoefficient() {
+    const type = this._target.type;
+    switch (type) {
+      case "wood":  return 0.47; // كرة خشبية: 0.45 – 0.50
+      case "stone": return 0.52; // كرة حجرية: 0.50 – 0.55
+      case "paper": return 0.47; // كرة ورقية: 0.47
+      default:      return 0.47;
+    }
   }
 
   update(input, dt) {
@@ -165,14 +224,15 @@ export class ForceManager {
     const ball = this._target;
     const linVel = ball.linearVelocity;
 
-    const moveForce = 20;
+    const moveForce = 20; // 
     const inputForce = new THREE.Vector3();
 
     if (this.mode === true) {
       if (input.right) inputForce.x += moveForce;
-      if (input.left) inputForce.x -= moveForce;
-      if (input.up) inputForce.z -= moveForce;
-      if (input.down) inputForce.z += moveForce;
+      if (input.left)  inputForce.x -= moveForce;
+      if (input.up)    inputForce.z -= moveForce;
+      if (input.down)  inputForce.z += moveForce;
+    
     }
 
 
@@ -181,7 +241,7 @@ export class ForceManager {
     totalForce.add(inputForce);
 
     // ==================================================
-    // dynamically added forces
+    // dynamically added forces (gravity + friction + airResistance)
     const forcesKeys = Object.keys(this._forces);
 
     forcesKeys.forEach((key) => {

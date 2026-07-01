@@ -154,5 +154,6 @@ export class CollisionManager {
     forceManager.updateNormalForce(ball.contactNormal, isGrounded);
     forceManager.updateSlidingFriction(isOnSlope);
     forceManager.updateRollingFriction();
+    forceManager.updateAirResistance();
   }
 }
