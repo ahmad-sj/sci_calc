@@ -64,7 +64,11 @@ export class Ball {
     this._radius = number;
     this.mesh.scale.x = this.mesh.scale.y = this.mesh.scale.z = number;
   }
-
+// عزم القصور الذاتي للكرة المتجانسة: I = 2/5 * m * r²
+  get inertia() {
+    return (2 / 5) * this._mass * this._radius * this._radius;
+  }
+  
   // ==================================================
   get position() {
     return this._position;

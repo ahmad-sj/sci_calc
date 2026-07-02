@@ -232,10 +232,9 @@ export class ForceManager {
       if (input.left)  inputForce.x -= moveForce;
       if (input.up)    inputForce.z -= moveForce;
       if (input.down)  inputForce.z += moveForce;
-    
+
     }
-
-
+    
     // ==================================================
     // Input force
     totalForce.add(inputForce);
@@ -265,9 +264,15 @@ export class ForceManager {
         .normalize();
 
       // 2. Calculate angular speed and delta angle
-      ball.angularVelocity = linVel.length() / ball.radius;
+      // τ = F_friction × r  →  α = τ / I  →  ω = v/r + α·dt
+      const frictionForce = this._forces["slidingFriction"]
+        ? this._forces["slidingFriction"].clone()
+        : new THREE.Vector3(0, 0, 0);
+      const torque = frictionForce.length() * ball.radius;
+      const alpha = torque / ball.inertia;
+      ball.angularVelocity = linVel.length() / ball.radius + alpha * dt;
       const angleDelta = ball.angularVelocity * dt;
-
+      
       // 3. Create a quaternion representing ONLY this frame's rotation step
       const rotationStep = new MyQuat().setFromAxisAngle(axis, -angleDelta);
 

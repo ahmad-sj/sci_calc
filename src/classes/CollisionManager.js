@@ -134,10 +134,7 @@ export class CollisionManager {
     if (!isGrounded) {
       this.forceManager.updateGravity(new THREE.Vector3(0, 1, 0));
     }
-
-
-
-
+    
     if (ball.position.y < targetGroundY) {
       forceManager.removeGravity();
       ball.position.y = targetGroundY;
