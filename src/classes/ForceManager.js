@@ -217,27 +217,48 @@ export class ForceManager {
       default:      return 0.47;
     }
   }
+  /**
+ * 5. قوة دفع اللاعب (Player Impulse)
+ * الصيغة: J = F·Δt → v_final = v_initial + J/m
+ * اللاعب لا يغير موقع الكرة مباشرة، بل يغير سرعتها عبر دفعة فيزيائية
+ * @param {Object} input - أزرار التحكم المضغوطة
+ * @param {number} dt - الزمن بين الفريمين
+ */
+applyPlayerImpulse(input, dt) {
+  // لا يعمل إلا بمود تحريك الكرة مباشرة (mode = true)
+  if (this._mode === false) return;
 
+  const ball = this._target;
+
+  // مقدار القوة المؤثرة خلال فترة الضغط
+  const F_magnitude = 20;
+
+  // متجه القوة حسب الزر المضغوط
+  const F_input = new THREE.Vector3();
+  if (input.right) F_input.x += F_magnitude;
+  if (input.left)  F_input.x -= F_magnitude;
+  if (input.up)    F_input.z -= F_magnitude;
+  if (input.down)  F_input.z += F_magnitude;
+
+  // إذا ما في زر مضغوط، لا يوجد دفع
+  if (F_input.lengthSq() === 0) return;
+
+  // حساب الدفعة: J = F · Δt
+  const J = F_input.clone().multiplyScalar(dt);
+
+  // تطبيق الدفعة على السرعة: v_final = v_initial + J/m
+  ball.linearVelocity.addScaledVector(J, 1 / ball.mass);
+}
   update(input, dt) {
     const totalForce = new THREE.Vector3(0, 0, 0);
 
     const ball = this._target;
     const linVel = ball.linearVelocity;
 
-    const moveForce = 20; // 
-    const inputForce = new THREE.Vector3();
-
-    if (this.mode === true) {
-      if (input.right) inputForce.x += moveForce;
-      if (input.left)  inputForce.x -= moveForce;
-      if (input.up)    inputForce.z -= moveForce;
-      if (input.down)  inputForce.z += moveForce;
-
-    }
-    
     // ==================================================
-    // Input force
-    totalForce.add(inputForce);
+    // Input force (Impulse) - تطبيق دفعة اللاعب مباشرة على السرعة
+    // J = F·Δt → v_final = v_initial + J/m
+    this.applyPlayerImpulse(input, dt);
 
     // ==================================================
     // dynamically added forces (gravity + friction + airResistance)
@@ -272,7 +293,7 @@ export class ForceManager {
       const alpha = torque / ball.inertia;
       ball.angularVelocity = linVel.length() / ball.radius + alpha * dt;
       const angleDelta = ball.angularVelocity * dt;
-      
+
       // 3. Create a quaternion representing ONLY this frame's rotation step
       const rotationStep = new MyQuat().setFromAxisAngle(axis, -angleDelta);
 
