@@ -5,7 +5,7 @@ export class CollisionManager {
   _items = {};
   _restitution = 0.6; // نسبة الطاقة المنقولة للصندوق عند الاصطدام
   _tangentialTransfer = 0.6; // نسبة المركبة الجانبية (الزاوية) المنقولة للصندوق
-  _torqueMultiplier = 0.5; // معامل تخفيف عام لعزم الدوران (دوران بسيط مو مبالغ فيه)
+  _torqueMultiplier = 1; // معامل تخفيف عام لعزم الدوران (1 = بدون تخفيف إضافي)
 
   constructor(forceManager) {
     this._forceManager = forceManager;
@@ -185,7 +185,6 @@ export class CollisionManager {
 
   // ==================================================
   // اصطدام صندوق مع صندوق
-  // فحص تداخل (Overlap) على محوري X,Z (بما إنه الصناديق ماشية عالأرض بنفس الارتفاع تقريباً)
   checkBoxBoxCollision(boxA, boxB) {
     const overlapX =
       Math.min(boxA._maxX, boxB._maxX) - Math.max(boxA._minX, boxB._minX);
@@ -196,7 +195,6 @@ export class CollisionManager {
     if (overlapX <= 0 || overlapZ <= 0) return;
 
     // نختار محور الفصل الأقل تداخلاً (Minimum Translation Vector)
-    // هاد المحور هو اتجاه "السطح" يلي صار فيه التصادم فعلياً
     let normal;
     let penetration;
 
@@ -217,22 +215,36 @@ export class CollisionManager {
     }
 
     // ==================================================
-    // تصحيح المواقع لمنع تداخل الصناديق ببعض (توزيع التصحيح بالتساوي)
-    const correction = normal.clone().multiplyScalar(penetration / 2);
-    boxA.position = boxA.position.clone().sub(correction);
-    boxB.position = boxB.position.clone().add(correction);
-    boxA.update();
-    boxB.update();
-
-    // ==================================================
-    // تبادل الزخم (Elastic Collision Response) باستخدام كتلتي الصندوقين
-    // الصيغة القياسية: J = -(1+e) * (v_rel . normal) / (1/mA + 1/mB)
+    // فحص اتجاه الحركة أولاً قبل أي تصحيح
+    // لو الصناديق عم يبتعدوا عن بعض أصلاً، ما في داعي نتدخل
     const relativeVelocity = boxA.velocity.clone().sub(boxB.velocity);
     const velAlongNormal = relativeVelocity.dot(normal);
 
-    // لو عم يبتعدوا عن بعض أصلاً، ما في داعي نطبق Impulse
     if (velAlongNormal > 0) return;
 
+    // ==================================================
+    // تصحيح الموقع — بس لو التداخل أكبر من عتبة صغيرة (slop)
+    // هاد يمنع الـ jitter الناتج عن تصحيح متراكم بكل فريم
+    const slop = 0.01;
+    const correctionMagnitude = Math.max(penetration - slop, 0) * 0.5;
+
+    if (correctionMagnitude > 0) {
+      const correction = normal.clone().multiplyScalar(correctionMagnitude);
+
+      const posA = boxA.position.clone().sub(correction);
+      boxA.mesh.position.set(posA.x, posA.y, posA.z);
+      boxA._position.copy(boxA.mesh.position);
+      boxA.update();
+
+      const posB = boxB.position.clone().add(correction);
+      boxB.mesh.position.set(posB.x, posB.y, posB.z);
+      boxB._position.copy(boxB.mesh.position);
+      boxB.update();
+    }
+
+    // ==================================================
+    // تبادل الزخم (Elastic Collision Response)
+    // الصيغة القياسية: J = -(1+e) * (v_rel · n) / (1/mA + 1/mB)
     const e = this._restitution;
     const invMassA = 1 / boxA.mass;
     const invMassB = 1 / boxB.mass;
@@ -244,20 +256,15 @@ export class CollisionManager {
     boxB.velocity.sub(impulse.clone().multiplyScalar(invMassB));
 
     // ==================================================
-    // عزم دوران بسيط (Torque) لو التصادم صار بزاوية (مو وجه بوجه بالظبط)
-    // نقيس مدى "الإزاحة الجانبية" بين مركزي الصندوقين عَ المحور العمودي على الـ normal
-    // كل ما زادت الإزاحة الجانبية، كل ما كان عزم الدوران أكبر
+    // عزم دوران بسيط لو التصادم بزاوية (مو وجه بوجه)
     const tangentAxis =
       overlapX < overlapZ
-        ? new THREE.Vector3(0, 0, 1) // التصادم عَ محور X -> الإزاحة الجانبية عَ Z
-        : new THREE.Vector3(1, 0, 0); // التصادم عَ محور Z -> الإزاحة الجانبية عَ X
+        ? new THREE.Vector3(0, 0, 1)
+        : new THREE.Vector3(1, 0, 0);
 
     const lateralOffset = boxB.position.clone().sub(boxA.position).dot(tangentAxis);
 
-    // عتبة بسيطة: لو الإزاحة الجانبية صغيرة جداً (تصادم وجه بوجه تماماً) ما منولد عزم
-    const offsetThreshold = 0.05;
-
-    if (Math.abs(lateralOffset) > offsetThreshold) {
+    if (Math.abs(lateralOffset) > 0.05) {
       const torqueMagnitude =
         impulseMagnitude * lateralOffset * 0.5 * this._torqueMultiplier;
 
@@ -320,6 +327,35 @@ export class CollisionManager {
     const ground = this._items["ground"];
     const forceManager = this._forceManager;
 
+    // ==================================================
+    // فحص سقوط الكرة من حافة الأرض -> إعادة تعيين تلقائية
+    // الأرض بـ Y=0، لو الكرة نزلت تحت عتبة معينة يعني سقطت من الحافة
+    const fallThreshold = ground._position.y - 10;
+
+    if (ball.position.y < fallThreshold) {
+      ball.reset();
+      forceManager.removeGravity();
+      return;
+    }
+
+    // ==================================================
+    // فحص خروج الصناديق من حدود الأرض -> إخفاء تلقائي
+    for (const item of Object.values(this._items)) {
+      if (item.constructor.name === "Box") {
+        const outOfBounds =
+          item.position.x < ground._minX ||
+          item.position.x > ground._maxX ||
+          item.position.z < ground._minZ ||
+          item.position.z > ground._maxZ;
+
+        if (outOfBounds) {
+          item.mesh.visible = false;
+          item.velocity.set(0, 0, 0);
+        }
+      }
+    }
+
+    // ==================================================
     // Check collision with boxes
     for (const item of Object.values(this._items)) {
       if (item.constructor.name === "Box") {
@@ -342,11 +378,19 @@ export class CollisionManager {
 
     const targetGroundY = ground._position.y + ball.radius;
 
+    // فحص إذا الكرة لسا فوق الأرض (ضمن حدودها X,Z)
+    // لو خرجت من حدود الأرض، ما نوقفها — نخليها تسقط طبيعياً حتى تصل fallThreshold
+    const onGround =
+      ball.position.x >= ground._minX &&
+      ball.position.x <= ground._maxX &&
+      ball.position.z >= ground._minZ &&
+      ball.position.z <= ground._maxZ;
+
     if (!onSlope) {
       this.forceManager.updateGravity(new THREE.Vector3(0, 1, 0));
     }
 
-    if (ball.position.y < targetGroundY) {
+    if (onGround && ball.position.y < targetGroundY) {
       forceManager.removeGravity();
       ball.position.y = targetGroundY;
       ball.contactNormal = new THREE.Vector3(0, 1, 0);
@@ -355,146 +399,3 @@ export class CollisionManager {
 }
 
 
-
-
-
-/*import * as THREE from "three";
-import { getClosestPoint3d } from "../helpers";
-
-export class CollisionManager {
-  _items = {};
-
-  constructor(forceManager) {
-    this._forceManager = forceManager;
-  }
-
-  get forceManager() {
-    return this._forceManager;
-  }
-
-  addItem(item) {
-    this._items[Object.keys(item)[0]] = Object.values(item)[0];
-  }
-
-  checkAABBCollision(ball, item) {
-    // 1. Find closest point on item to ball's center
-    const closestPoint = getClosestPoint3d(item, ball);
-
-    // 2. Calc distance between ball's center and closest point
-    const distance = Math.sqrt(
-      (closestPoint.x - ball.position.x) ** 2 +
-        (closestPoint.y - ball.position.y) ** 2 +
-        (closestPoint.z - ball.position.z) ** 2,
-    );
-
-    // 3. if distance is smaller than ball's radius, we have a collision
-    return {
-      isColliding: distance < ball.radius,
-      closestPoint: closestPoint,
-      distance: distance,
-    };
-  }
-
-  checkBoxCollision(item, ball) {
-    const collision = this.checkAABBCollision(ball, item);
-
-    if (collision.isColliding) {
-      // calc overlap between ball and item
-      const overlap = ball.radius - collision.distance;
-
-      // calc overlapping direction vector
-      const direction = {
-        x: (ball.position.x - collision.closestPoint.x) / collision.distance,
-        y: (ball.position.y - collision.closestPoint.y) / collision.distance,
-        z: (ball.position.z - collision.closestPoint.z) / collision.distance,
-      };
-
-      // correct ball's position to prevent penetration
-      const ballNewX = ball.position.x + direction.x * overlap;
-      const ballNewY = ball.position.y + direction.y * overlap;
-      const ballNewZ = ball.position.z + direction.z * overlap;
-      const ballNewPosition = new THREE.Vector3(ballNewX, ballNewY, ballNewZ);
-      ball.position = ballNewPosition;
-
-      // mocking collision response
-      ball._linearVelocity.negate().multiplyScalar(0.5);
-    }
-  }
-
-  checkSlopeCollision() {
-    const ball = this._items["ball"];
-    const slope = this._items["slope"];
-
-    // Get theoretical ground height at ball's center (X,Z)
-    const slopeY = slope.getHeightAt(ball.position.x, ball.position.z);
-
-    // Distance from ball center to slope surface
-    const distanceToSurface = ball.position.y - (slopeY + ball.radius);
-
-    // check if ball is within slope bounds (X,Z)
-    if (slope.contains(ball)) {
-      // if ball is above slope surface
-      if (distanceToSurface >= 0) {
-        this.forceManager.updateGravity(new THREE.Vector3(0, 1, 0));
-        return true;
-      }
-
-      // if ball is below slope surface
-      if (slopeY > ball.position.y + ball.radius) {
-        this.forceManager.removeGravity();
-        return false;
-      }
-
-      // if ball is penetrating slope surface
-      if (distanceToSurface < 0) {
-        // if slope is flat
-        if (slope.normal.x == 0 && slope.normal.y == 1 && slope.normal.z == 0) {
-          this.forceManager.removeGravity();
-          this.correctPositionOnSlope(ball, slope, distanceToSurface);
-          return true;
-        }
-
-        // slope is not flat
-        ball.contactNormal = slope.normal;
-        this.forceManager.updateGravity(slope.normal);
-        this.correctPositionOnSlope(ball, slope, distanceToSurface);
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  correctPositionOnSlope(ball, slope, penetrationDepth) {
-    const correction = slope.normal.clone().multiplyScalar(-penetrationDepth);
-    ball.position.add(correction);
-  }
-
-  update() {
-    const ball = this._items["ball"];
-    const ground = this._items["ground"];
-    const forceManager = this._forceManager;
-
-    // Check collision with boxes
-    for (const item of Object.values(this._items)) {
-      if (item.constructor.name === "Box") {
-        this.checkBoxCollision(item, ball);
-      }
-    }
-
-    const onSlope = this.checkSlopeCollision();
-
-    const targetGroundY = ground._position.y + ball.radius;
-
-    if (!onSlope) {
-      this.forceManager.updateGravity(new THREE.Vector3(0, 1, 0));
-    }
-
-    if (ball.position.y < targetGroundY) {
-      forceManager.removeGravity();
-      ball.position.y = targetGroundY;
-      ball.contactNormal = new THREE.Vector3(0, 1, 0);
-    }
-  }
-}
-*/

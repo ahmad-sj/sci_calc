@@ -82,8 +82,8 @@ const ironBox = new Box(ironBoxPosition, ironBoxSize, "iron_box");
 ironBox.addToScene(scene);
 
 // ===================================================
-// draw slope
-const slopePosition = new THREE.Vector3(0, 5, 0);
+// draw slope — على الجانب الأيمن من المشهد (بعيد عن المنتصف)
+const slopePosition = new THREE.Vector3(28, 5, 0);
 const slopeWidth = 16;
 const slopeLength = 16;
 const slopeNormal = new THREE.Vector3(0, 1, 0).normalize();
@@ -97,9 +97,9 @@ scene.add(planeHelper);
 slope.addToScene(scene);
 
 // ==================================================
-// draw ball
+// draw ball — تبدأ فوق المستوى المائل (28, 5, 0) بارتفاع كافٍ
 const ball = new Ball();
-ball.position.set(0, 10, 0);
+ball.position.set(28, 8, 0);
 ball.addToScene(scene);
 
 // ===================================================
@@ -258,3 +258,6 @@ function animate(time) {
 }
 
 renderer.setAnimationLoop(animate);
+
+
+
