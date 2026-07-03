@@ -80,7 +80,10 @@ const ironBoxPosition = new THREE.Vector3(-16, 1, -6);
 const ironBoxSize = 2;
 const ironBox = new Box(ironBoxPosition, ironBoxSize, "iron_box");
 ironBox.addToScene(scene);
-
+///
+woodBox.mass = 3;  // صندوق خشب 
+ironBox.mass = 8;  // صندوق حديد
+////
 // ===================================================
 // draw slope
 const slopePosition = new THREE.Vector3(0, 5, 0);
@@ -196,7 +199,7 @@ function animate(time) {
 
   planeHelper.update();
 
-  collisionManager.update();
+  collisionManager.update(dt);
 
   forceManager.update(input, dt);
 
