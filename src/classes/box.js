@@ -6,13 +6,19 @@ export class Box {
   _position = new THREE.Vector3(0, 0, 0);
 
   // ===============================================
-  //التصادم الفيزيائي 
-  _mass = 5;                                    // كتلة الصندوق (kg) — تُحدد من main.js
-  _velocity = new THREE.Vector3(0, 0, 0);       // سرعة الصندوق بعد الاصطدام
-  _mu_floor = 0.6;                              // معامل احتكاك الصندوق مع الأرضية
+  //التصادم الفيزيائي
+  _mass = 5; // كتلة الصندوق (kg) — تُحدد من main.js
+  _velocity = new THREE.Vector3(0, 0, 0); // سرعة الصندوق بعد الاصطدام
+  _mu_floor = 0.6; // معامل احتكاك الصندوق مع الأرضية
   _angularVelocity = new THREE.Vector3(0, 0, 0); // سرعة دوران الصندوق
-  get angularVelocity() { return this._angularVelocity; }
-  set angularVelocity(value) { this._angularVelocity.copy(value); }
+  _lastEnergyLoss = 0;
+
+  get angularVelocity() {
+    return this._angularVelocity;
+  }
+  set angularVelocity(value) {
+    this._angularVelocity.copy(value);
+  }
   // ===============================================
 
   _minX = this._position.x - this.size / 2;
@@ -57,7 +63,7 @@ export class Box {
   }
 
   // ===============================================
-  // getters setters 
+  // getters setters
   get mass() {
     return this._mass;
   }
@@ -73,10 +79,22 @@ export class Box {
   set velocity(value) {
     this._velocity.copy(value);
   }
-  // ===============================================
 
   // ===============================================
-  // حركة الصندوق بعد الاصطدام 
+  get lastEnergyLoss() {
+    return +this._lastEnergyLoss.toFixed(4);
+  }
+
+  set lastEnergyLoss(number) {
+    this._lastEnergyLoss = number;
+  }
+
+  get KE() {
+    return +(0.5 * this._mass * this._velocity.lengthSq()).toFixed(4);
+  }
+
+  // ===============================================
+  // حركة الصندوق بعد الاصطدام
   // الصندوق يتباطأ بسبب الاحتكاك مع الأرضية حتى يتوقف
   // a_C = -mu_floor * g * u_vC
   updateMovement(dt, g = 9.81) {

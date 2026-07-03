@@ -33,7 +33,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, canvas });
 // ==================================================
 //setting camera controls
 const controls = new OrbitControls(camera, renderer.domElement);
-const cameraOffset = new THREE.Vector3(0, 10, 20); // Distance from object
+const cameraOffset = new THREE.Vector3(0, 10, 30); // Distance from object
 let cameraMode = true;
 
 // ==================================================
@@ -74,16 +74,15 @@ ground.addToScene(scene);
 const woodBoxPosition = new THREE.Vector3(16, 1, 3);
 const woodBoxSize = 2;
 const woodBox = new Box(woodBoxPosition, woodBoxSize, "wood_box");
+woodBox.mass = 3;
 woodBox.addToScene(scene);
 
 const ironBoxPosition = new THREE.Vector3(-16, 1, -6);
 const ironBoxSize = 2;
 const ironBox = new Box(ironBoxPosition, ironBoxSize, "iron_box");
+ironBox.mass = 8;
 ironBox.addToScene(scene);
-///
-woodBox.mass = 3;  // صندوق خشب 
-ironBox.mass = 8;  // صندوق حديد
-////
+
 // ===================================================
 // draw slope
 const slopePosition = new THREE.Vector3(0, 5, 0);
@@ -93,7 +92,7 @@ const slopeNormal = new THREE.Vector3(0, 1, 0).normalize();
 
 const slope = new Slope(slopePosition, slopeWidth, slopeLength, slopeNormal);
 
-// show normals of solpe vertices
+// show normals of slope vertices
 const planeHelper = new VertexNormalsHelper(slope.mesh, 1, 0xff0000);
 scene.add(planeHelper);
 
@@ -119,10 +118,9 @@ listenToKeyboard(input);
 drawSkybox(scene);
 
 // ==================================================
-// force manager — لازم يكون قبل الـ gui كرمال نقدر نربطه
 const forceManager = new ForceManager();
 forceManager.target = ball;
-forceManager._airResistanceMultiplier = 1; // مضاعف مقاومة الهواء
+forceManager._airResistanceMultiplier = 1;
 
 // ==================================================
 // collisions handling
@@ -136,104 +134,44 @@ collisionManager.addItem({ slope: slope });
 // ==================================================
 // lil-gui controls
 
-// ── Ball Folder ──────────────────────────────────────────────────────
+// Ball folder
 const ballFolder = gui.addFolder("Ball");
+ballFolder.add(ball, "mass", 0.5, 9, 0.25).name("mass");
+ballFolder.add(ball, "inertia").name("inertia").disable();
+ballFolder.add(ball, "effectiveMass").name("effective mass").disable();
+ballFolder.add(ball, "onSurface").name("on surface").disable();
+ballFolder.add(ball, "type", Object.keys(ball.textures)).name("type");
 
-// mass: عرض فقط (بيتغير تلقائياً مع type)
-ballFolder.add(ball, "mass").name("mass").disable();
-
-// type: dropdown يغير نوع الكرة ويحدث العرض
-ballFolder
-  .add(ball, "type", Object.keys(ball.textures))
-  .name("type")
-  .onChange(() => {
-    updateAllGuiDisplays(gui);
-  });
-
-// I = 2/5 * m * r²: عرض فقط
-const ballDisplayI = { get I() { return +ball.inertia.toFixed(4); } };
-ballFolder.add(ballDisplayI, "I").name("I (Moment of Inertia)").disable();
-
-// m_eff = (7/5)*m: عرض فقط
-const ballDisplayMeff = { get m_eff() { return +((7 / 5) * ball.mass).toFixed(4); } };
-ballFolder.add(ballDisplayMeff, "m_eff").name("m_eff = (7/5)·m").disable();
-
-// ── Physics Folder ───────────────────────────────────────────────────
-const physicsFolder = gui.addFolder("Physics");
-
-// Rolling Friction c_rr: 0.001 → 0.05
-physicsFolder
-  .add(forceManager, "_c_rr", 0.001, 0.05, 0.001)
-  .name("Rolling Friction (c_rr)");
-
-// Sliding Friction mu: 0.05 → 0.8
-physicsFolder
-  .add(forceManager, "_mu_flat", 0.05, 0.8, 0.01)
-  .name("Sliding Friction (mu)");
-
-// Air Resistance multiplier: 0 → 3
-physicsFolder
+// coefficients / constants controls
+const coffecientsFolder = gui.addFolder("Coefficients / Constants");
+coffecientsFolder.add(forceManager, "_g", 0, 50, 0.2).name("gravity");
+coffecientsFolder.add(forceManager, "_mu", 0, 1, 0.1).name("fr_sliding");
+coffecientsFolder.add(forceManager, "_c_rr", 0, 0.1, 0.001).name("fr_rolling");
+coffecientsFolder.add(forceManager, "_rho", 0, 3, 0.3).name("rho_air");
+coffecientsFolder.add(ball, "dragCoefficient", 0, 1, 0.01).name("drag");
+coffecientsFolder
   .add(forceManager, "_airResistanceMultiplier", 0, 3, 0.1)
-  .name("Air Resistance x");
+  .name("air resistance mult");
 
-// ── Wood Box Folder ──────────────────────────────────────────────────
+// Wood Box Folder
 const woodBoxFolder = gui.addFolder("Wood Box");
+woodBoxFolder.add(woodBox, "_mass", 1, 20, 0.5).name("Mass");
+woodBoxFolder.add(woodBox, "_mu_floor", 0.1, 5, 0.1).name("Ground Friction");
 
-// Mass: 1 → 20 kg
-woodBoxFolder
-  .add(woodBox, "_mass", 1, 20, 0.5)
-  .name("Mass");
-
-// Ground Friction: 0.1 → 5
-woodBoxFolder
-  .add(woodBox, "_mu_floor", 0.1, 5, 0.1)
-  .name("Ground Friction");
-
-// ── Iron Box Folder ──────────────────────────────────────────────────
+// Iron Box Folder
 const ironBoxFolder = gui.addFolder("Iron Box");
+ironBoxFolder.add(ironBox, "_mass", 1, 20, 0.5).name("Mass");
+ironBoxFolder.add(ironBox, "_mu_floor", 0.1, 5, 0.1).name("Ground Friction");
 
-// Mass: 1 → 20 kg
-ironBoxFolder
-  .add(ironBox, "_mass", 1, 20, 0.5)
-  .name("Mass");
-
-// Ground Friction: 0.1 → 5
-ironBoxFolder
-  .add(ironBox, "_mu_floor", 0.1, 5, 0.1)
-  .name("Ground Friction");
+// Energy Folder
+const energyFolder = gui.addFolder("Energy");
+energyFolder.add(ball, "KE").name("KE_ball").disable();
+energyFolder.add(woodBox, "KE").name("KE_box (wood)").disable();
+energyFolder.add(ironBox, "KE").name("KE_box (iron)").disable();
+energyFolder.add(woodBox, "lastEnergyLoss").name("ΔKE (wood)").disable();
+energyFolder.add(ironBox, "lastEnergyLoss").name("ΔKE (iron)").disable();
 
 // ==================================================
-/////
-// ── Energy Folder ────────────────────────────────────────────────────
-const energyFolder = gui.addFolder("Energy");
-
-// KE_ball = ½·m·v² + ½·I·ω²
-const energyDisplay = {
-  get "KE_ball"() {
-    return +(0.5 * ball.mass * ball.linearVelocity.lengthSq()
-           + 0.5 * ball.inertia * ball.angularVelocity * ball.angularVelocity).toFixed(4);
-  },
-  get "KE_box_wood"() {
-    return +(0.5 * woodBox.mass * woodBox.velocity.lengthSq()).toFixed(4);
-  },
-  get "KE_box_iron"() {
-    return +(0.5 * ironBox.mass * ironBox.velocity.lengthSq()).toFixed(4);
-  },
-  get "ΔKE_wood"() {
-  return +collisionManager.lastEnergyLossWood.toFixed(4);
-},
-get "ΔKE_iron"() {
-  return +collisionManager.lastEnergyLossIron.toFixed(4);
-},
-};
-
-energyFolder.add(energyDisplay, "KE_ball").name("KE_ball").disable();
-energyFolder.add(energyDisplay, "KE_box_wood").name("KE_box (wood)").disable();
-energyFolder.add(energyDisplay, "KE_box_iron").name("KE_box (iron)").disable();
-// ΔKE منفصل لكل صندوق
-energyFolder.add(energyDisplay, "ΔKE_wood").name("ΔKE (wood)").disable();
-energyFolder.add(energyDisplay, "ΔKE_iron").name("ΔKE (iron)").disable();
-/////////
 function controlKeys() {
   if (input.reset) {
     ball.reset();
@@ -288,12 +226,9 @@ function animate(time) {
   planeHelper.update();
 
   collisionManager.update(dt);
-  updateAllGuiDisplays(gui);
-
   forceManager.update(input, dt);
 
-  console.log("contact: ", ball.contactNormal);
-  console.log("slope: ", slope.normal);
+  updateAllGuiDisplays(gui);
 
   updateCamera();
 

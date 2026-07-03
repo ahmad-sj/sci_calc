@@ -4,14 +4,6 @@ import { getClosestPoint3d } from "../helpers";
 export class CollisionManager {
   _items = {};
 
-_lastEnergyLossWood = 0; // الطاقة المفقودة آخر تصادم مع الصندوق الخشبي
-_lastEnergyLossIron = 0; // الطاقة المفقودة آخر تصادم مع الصندوق الحديدي
-
-get lastEnergyLossWood() { return this._lastEnergyLossWood; }
-get lastEnergyLossIron() { return this._lastEnergyLossIron; }
-
-get lastEnergyLoss() { return this._lastEnergyLoss; }
-
   constructor(forceManager) {
     this._forceManager = forceManager;
   }
@@ -64,7 +56,9 @@ get lastEnergyLoss() { return this._lastEnergyLoss; }
     // depth = r - |d|
     // C'_ball = C_ball + n̂ * depth
     const penetrationDepth = ball.radius - collision.distance;
-    ball.position = ball.position.clone().addScaledVector(normal, penetrationDepth);
+    ball.position = ball.position
+      .clone()
+      .addScaledVector(normal, penetrationDepth);
 
     // ── الخطوة 3: حساب السرعة النسبية عند نقطة التماس ──────────
     // r_A = -r * n̂  (من مركز الكرة إلى نقطة التماس)
@@ -72,11 +66,10 @@ get lastEnergyLoss() { return this._lastEnergyLoss; }
 
     // v_rel = (v_B + ω_B × r_A) - v_C
     // ω_B × r_A: السرعة المماسية الناتجة عن دوران الكرة
-    const omegaVec = new THREE.Vector3()
-      .crossVectors(
-        new THREE.Vector3(0, ball.angularVelocity, 0),
-        rA
-      );
+    const omegaVec = new THREE.Vector3().crossVectors(
+      new THREE.Vector3(0, ball.angularVelocity, 0),
+      rA,
+    );
     const vRel = new THREE.Vector3()
       .addVectors(ball.linearVelocity, omegaVec)
       .sub(item.velocity);
@@ -89,7 +82,7 @@ get lastEnergyLoss() { return this._lastEnergyLoss; }
 
     // ── الخطوة 4: حساب مقدار الدفعة Jn ────────────────────────
     // معامل الارتداد حسب نوع الكرة
-    const e = this._getRestitution(ball.type);
+    const e = ball.restitutionCoefficient;
 
     // I_B = 2/5 * m * r²  (من getter بـ ball.js)
     const I_B = ball.inertia;
@@ -99,13 +92,14 @@ get lastEnergyLoss() { return this._lastEnergyLoss; }
     const rAxNSq = rAxN.lengthSq();
 
     // Jn = -(1+e) * v_rel_n / (1/m_B + 1/m_C + |r_A×n̂|²/I_B)
-    const denominator = (1 / ball.mass) + (1 / item.mass) + (rAxNSq / I_B);
+    const denominator = 1 / ball.mass + 1 / item.mass + rAxNSq / I_B;
     const Jn = (-(1 + e) * vRelN) / denominator;
-    
-      // ── حساب الطاقة قبل التصادم ─────────────────────────────────
-      // KE_before = ½·m_ball·v² + ½·I·ω² (الصندوق ساكن قبل التصادم)
-    const KE_before = 0.5 * ball.mass * ball.linearVelocity.lengthSq()
-                + 0.5 * ball.inertia * ball.angularVelocity * ball.angularVelocity;
+
+    // ── حساب الطاقة قبل التصادم ─────────────────────────────────
+    // KE_before = ½·m_ball·v² + ½·I·ω² (الصندوق ساكن قبل التصادم)
+    const KE_before =
+      0.5 * ball.mass * ball.linearVelocity.lengthSq() +
+      0.5 * ball.inertia * ball.angularVelocity * ball.angularVelocity;
 
     // ── الخطوة 5: تحديث السرعات ─────────────────────────────────
     // v'_B = v_B + (Jn/m_B) * n̂  (الكرة)
@@ -116,37 +110,37 @@ get lastEnergyLoss() { return this._lastEnergyLoss; }
 
     // الخطوة 6: عزم الدوران على الصندوق
     // نقطة التصادم بالنسبة لمركز الصندوق
-    const rBox = new THREE.Vector3().subVectors(collision.closestPoint, item.position);
+    const rBox = new THREE.Vector3().subVectors(
+      collision.closestPoint,
+      item.position,
+    );
     // فقط إذا في ذراع دوران حقيقي (ضربة على الزاوية مش الوجه)
     if (Math.abs(Jn) > 0.5 && rBox.lengthSq() > 0.01) {
-    // عزم الدوران = r × (Jn * n̂)
-    const impulseVec = normal.clone().multiplyScalar(Jn);
-    const torque = new THREE.Vector3().crossVectors(rBox, impulseVec);
+      // عزم الدوران = r × (Jn * n̂)
+      const impulseVec = normal.clone().multiplyScalar(Jn);
+      const torque = new THREE.Vector3().crossVectors(rBox, impulseVec);
 
-    // I_box = 1/6 * m * size²  (للمكعب)
-    const I_box = (1 / 6) * item.mass * item.size * item.size*2;
+      // I_box = 1/6 * m * size²  (للمكعب)
+      const I_box = (1 / 6) * item.mass * item.size * item.size * 2;
 
-    // تحديث السرعة الزاوية للصندوق
-    item.angularVelocity.addScaledVector(torque, -1 / I_box);
+      // تحديث السرعة الزاوية للصندوق
+      item.angularVelocity.addScaledVector(torque, -1 / I_box);
     }
-  // ── حساب الطاقة بعد التصادم والطاقة المفقودة ────────────────
-  // KE_after = ½·m_ball·v'² + ½·I·ω'² + ½·m_box·v_box'²
-  const KE_after = 0.5 * ball.mass * ball.linearVelocity.lengthSq()
-               + 0.5 * ball.inertia * ball.angularVelocity * ball.angularVelocity
-               + 0.5 * item.mass * item.velocity.lengthSq();
+    // ── حساب الطاقة بعد التصادم والطاقة المفقودة ────────────────
+    // KE_after = ½·m_ball·v'² + ½·I·ω'² + ½·m_box·v_box'²
+    const KE_after =
+      0.5 * ball.mass * ball.linearVelocity.lengthSq() +
+      0.5 * ball.inertia * ball.angularVelocity * ball.angularVelocity +
+      0.5 * item.mass * item.velocity.lengthSq();
 
-  // ΔKE = KE_before - KE_after (دايماً موجب — طاقة فقدت)
-  // نفرق بين الصندوق الخشبي والحديدي حسب كتلته
-  if (item.mass <= 3) {
-  this._lastEnergyLossWood = Math.max(0, KE_before - KE_after);
-  } else {
-  this._lastEnergyLossIron = Math.max(0, KE_before - KE_after);
-  }
+    // ΔKE = KE_before - KE_after (دايماً موجب — طاقة فقدت)
+    item.lastEnergyLoss = Math.max(0, KE_before - KE_after);
   }
 
   checkSlopeCollision() {
     const ball = this._items["ball"];
     const slope = this._items["slope"];
+    const forceManager = this._forceManager;
 
     // Get theoretical ground height at ball's center (X,Z)
     const slopeY = slope.getHeightAt(ball.position.x, ball.position.z);
@@ -158,33 +152,31 @@ get lastEnergyLoss() { return this._lastEnergyLoss; }
     if (slope.contains(ball)) {
       // if ball is above slope surface
       if (distanceToSurface >= 0) {
-        this.forceManager.updateGravity(new THREE.Vector3(0, 1, 0));
-        // الكرة فوق السطح بدون تلامس -> ليست على الأرض
+        forceManager.updateGravity(new THREE.Vector3(0, 1, 0));
         return false;
       }
 
       // if ball is below slope surface
       if (slopeY > ball.position.y + ball.radius) {
-        this.forceManager.removeGravity();
         return false;
       }
 
-      // if ball is penetrating slope surface
+      // if ball penetrated slope surface
       if (distanceToSurface < 0) {
-        // if slope is flat
+        // slope is flat
         if (slope.normal.x == 0 && slope.normal.y == 1 && slope.normal.z == 0) {
-          this.forceManager.removeGravity();
+          forceManager.removeGravity();
           this.correctPositionOnSlope(ball, slope, distanceToSurface);
-          // تلامس مع منحدر مسطح -> القوة الطبيعية = (0,1,0)
           ball.contactNormal = new THREE.Vector3(0, 1, 0);
+          forceManager._mu = 0.3;
           return true;
         }
 
         // slope is not flat
         ball.contactNormal = slope.normal;
-        this.forceManager.updateGravity(slope.normal);
+        forceManager._mu = 0.1;
+        forceManager.updateGravity(slope.normal);
         this.correctPositionOnSlope(ball, slope, distanceToSurface);
-        // تلامس مع منحدر مائل
         return true;
       }
     }
@@ -196,16 +188,7 @@ get lastEnergyLoss() { return this._lastEnergyLoss; }
     const correction = slope.normal.clone().multiplyScalar(-penetrationDepth);
     ball.position.add(correction);
   }
-///
-_getRestitution(ballType) {
-    switch (ballType) {
-      case "stone": return 0.25;
-      case "wood":  return 0.40;
-      case "paper": return 0.15;
-      default:      return 0.35;
-    }
-  }
-/////
+
   update(dt) {
     const ball = this._items["ball"];
     const ground = this._items["ground"];
@@ -218,37 +201,33 @@ _getRestitution(ballType) {
       }
     }
 
-     for (const item of Object.values(this._items)) {
+    for (const item of Object.values(this._items)) {
       if (item.constructor.name === "Box") {
         item.updateMovement(dt);
       }
     }
 
-    // هل الكرة تلامس سطحاً (أرضاً أو منحدراً)؟
-    let isGrounded = this.checkSlopeCollision();
-    let isOnSlope = false;
+    // ===============================================
+    // check collision with slope
+    const isOnSlope = this.checkSlopeCollision();
+
+    if (!isOnSlope) {
+      forceManager.updateGravity(new THREE.Vector3(0, 1, 0));
+    }
+
+    // ===============================================
+    // Check collision with ground
+    let isOnGround = false;
     const targetGroundY = ground._position.y + ball.radius;
 
-    if (!isGrounded) {
-      this.forceManager.updateGravity(new THREE.Vector3(0, 1, 0));
-    }
-    
+    // if ball penetrated the ground (also means ball on ground)
     if (ball.position.y < targetGroundY) {
       forceManager.removeGravity();
       ball.position.y = targetGroundY;
       ball.contactNormal = new THREE.Vector3(0, 1, 0);
-      // تلامس مع الأرض العادية
-      isGrounded = true;
-      isOnSlope = false;
-    }else if (isGrounded) {
-      const normal = ball.contactNormal;
-      isOnSlope = !(normal.x === 0 && normal.y === 1 && normal.z === 0);
+      isOnGround = true;
     }
 
-    // ربط القوة الطبيعية والاحتكاك بحالة التلامس الفعلية
-    forceManager.updateNormalForce(ball.contactNormal, isGrounded);
-    forceManager.updateSlidingFriction(isOnSlope);
-    forceManager.updateRollingFriction();
-    forceManager.updateAirResistance();
+    ball.onSurface = isOnGround || isOnSlope;
   }
 }

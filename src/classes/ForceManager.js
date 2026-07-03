@@ -3,13 +3,25 @@ import { MyQuat } from "./MyQuat";
 
 export class ForceManager {
   _target;
+
+  // applied forces list
   _forces = {};
-  _g = 9.81; // gravity acceleration
-  _c_rr = 0.003; // rolling resistance coefficient
-  _mu_flat = 0.30; // sliding friction coefficient on flat surface
-  _mu_slope = 0.10; // معامل الاحتكاك على منحدر مائل
-  _normalForceMagnitude = 0; // قيمة القوة الطبيعية لاستخدامها في حساب الاحتكاك
-  _rho = 1.225; // كثافة الهواء kg/m³
+
+  // gravity acceleration
+  _g = 9.81;
+
+  // rolling resistance coefficient
+  _c_rr = 0.003;
+
+  // sliding friction coefficient (default 0.3 for flat surface, 0.1 for slope)
+  // updated from CollisionManager when ball is in contact with slope or ground
+  _mu = 0.3;
+
+  // قيمة القوة الطبيعية لاستخدامها في حساب الاحتكاك
+  _normalForceMagnitude = 0;
+
+  // كثافة الهواء kg/m³
+  _rho = 1.225;
 
   // moving mode (true by tilting, false by moving)
   _mode = false;
@@ -50,9 +62,8 @@ export class ForceManager {
     // Fg = (m.g.sin(theta)).i^ - (m.g.cos(theta)).j^
 
     const target = this._target;
-    
-    const globalGravity = new THREE.Vector3(0, -this.g * target.mass, 0);
 
+    const globalGravity = new THREE.Vector3(0, -this.g * target.mass, 0);
 
     if (normal.x === 0 && normal.y === 1 && normal.z === 0) {
       this.add({ gravity: globalGravity });
@@ -70,14 +81,12 @@ export class ForceManager {
     this.remove("gravity");
   }
 
-  /**
-   * حساب مقدار القوة الطبيعية وتخزينه لاستخدامه في قوى الاحتكاك
-   * @param {THREE.Vector3} surfaceNormal - ناظم السطح الحالي
-   * @param {boolean} isGrounded - هل الكرة تلامس السطح؟
-   */
-  updateNormalForce(surfaceNormal, isGrounded) {
+  updateNormalForce() {
+    const ball = this._target;
+    const surfaceNormal = ball.contactNormal;
+
     // إذا كانت الكرة في الهواء، القوة الطبيعية تنعدم فوراً
-    if (!isGrounded) {
+    if (!ball.onSurface) {
       this._normalForceMagnitude = 0;
       return;
     }
@@ -104,7 +113,7 @@ export class ForceManager {
    * 1.3 حساب وتطبيق قوة الاحتكاك الانزلاقي (Sliding Friction)
    * الصيغة الشعاعية: F_k = -mu_k * N * v_hat
    */
-  updateSlidingFriction(isOnSlope = false) {
+  updateSlidingFriction() {
     // جلب سرعة الكرة الخطية الحالية
     const velocity = this._target.linearVelocity;
 
@@ -118,7 +127,7 @@ export class ForceManager {
     const vHat = velocity.clone().normalize();
 
     // اختيار معامل الاحتكاك حسب نوع السطح
-    const mu = isOnSlope ? this._mu_slope : this._mu_flat;
+    const mu = this._mu;
 
     // تطبيق الصيغة الشعاعية: F_k = -mu_k * N * v_hat
     const frictionForce = vHat.multiplyScalar(-mu * this._normalForceMagnitude);
@@ -189,7 +198,7 @@ export class ForceManager {
     const A = Math.PI * r_effective * r_effective;
 
     // معامل السحب حسب نوع الكرة (من جدول الدراسة الفيزيائية)
-    const C_d = this._getDragCoefficient();
+    const C_d = this._target.dragCoefficient;
 
     // مقدار قوة مقاومة الهواء: F_D = 0.5 * ρ * C_d * A * v²
     const dragMagnitude = 0.5 * this._rho * C_d * A * speedSq;
@@ -205,50 +214,38 @@ export class ForceManager {
   }
 
   /**
-   * جلب معامل السحب C_d حسب نوع الكرة الحالي
-   * 
+   * 5. قوة دفع اللاعب (Player Impulse)
+   * الصيغة: J = F·Δt → v_final = v_initial + J/m
+   * اللاعب لا يغير موقع الكرة مباشرة، بل يغير سرعتها عبر دفعة فيزيائية
+   * @param {Object} input - أزرار التحكم المضغوطة
+   * @param {number} dt - الزمن بين الفريمين
    */
-  _getDragCoefficient() {
-    const type = this._target.type;
-    switch (type) {
-      case "wood":  return 0.47; // كرة خشبية: 0.45 – 0.50
-      case "stone": return 0.52; // كرة حجرية: 0.50 – 0.55
-      case "paper": return 0.47; // كرة ورقية: 0.47
-      default:      return 0.47;
-    }
+  applyPlayerImpulse(input, dt) {
+    // لا يعمل إلا بمود تحريك الكرة مباشرة (mode = true)
+    if (this._mode === false) return;
+
+    const ball = this._target;
+
+    // مقدار القوة المؤثرة خلال فترة الضغط
+    const F_magnitude = 20;
+
+    // متجه القوة حسب الزر المضغوط
+    const F_input = new THREE.Vector3();
+    if (input.right) F_input.x += F_magnitude;
+    if (input.left) F_input.x -= F_magnitude;
+    if (input.up) F_input.z -= F_magnitude;
+    if (input.down) F_input.z += F_magnitude;
+
+    // إذا ما في زر مضغوط، لا يوجد دفع
+    if (F_input.lengthSq() === 0) return;
+
+    // حساب الدفعة: J = F · Δt
+    const J = F_input.clone().multiplyScalar(dt);
+
+    // تطبيق الدفعة على السرعة: v_final = v_initial + J/m
+    ball.linearVelocity.addScaledVector(J, 1 / ball.mass);
   }
-  /**
- * 5. قوة دفع اللاعب (Player Impulse)
- * الصيغة: J = F·Δt → v_final = v_initial + J/m
- * اللاعب لا يغير موقع الكرة مباشرة، بل يغير سرعتها عبر دفعة فيزيائية
- * @param {Object} input - أزرار التحكم المضغوطة
- * @param {number} dt - الزمن بين الفريمين
- */
-applyPlayerImpulse(input, dt) {
-  // لا يعمل إلا بمود تحريك الكرة مباشرة (mode = true)
-  if (this._mode === false) return;
 
-  const ball = this._target;
-
-  // مقدار القوة المؤثرة خلال فترة الضغط
-  const F_magnitude = 20;
-
-  // متجه القوة حسب الزر المضغوط
-  const F_input = new THREE.Vector3();
-  if (input.right) F_input.x += F_magnitude;
-  if (input.left)  F_input.x -= F_magnitude;
-  if (input.up)    F_input.z -= F_magnitude;
-  if (input.down)  F_input.z += F_magnitude;
-
-  // إذا ما في زر مضغوط، لا يوجد دفع
-  if (F_input.lengthSq() === 0) return;
-
-  // حساب الدفعة: J = F · Δt
-  const J = F_input.clone().multiplyScalar(dt);
-
-  // تطبيق الدفعة على السرعة: v_final = v_initial + J/m
-  ball.linearVelocity.addScaledVector(J, 1 / ball.mass);
-}
   update(input, dt) {
     const totalForce = new THREE.Vector3(0, 0, 0);
 
@@ -259,6 +256,22 @@ applyPlayerImpulse(input, dt) {
     // Input force (Impulse) - تطبيق دفعة اللاعب مباشرة على السرعة
     // J = F·Δt → v_final = v_initial + J/m
     this.applyPlayerImpulse(input, dt);
+
+    // ==================================================
+    // Normal Force - حساب القوة الطبيعية لتطبيقها على الاحتكاك
+    this.updateNormalForce();
+
+    // ==================================================
+    // Rolling Friction - الاحتكاك الدوراني
+    this.updateRollingFriction();
+
+    // ==================================================
+    // Sliding Friction - الاحتكاك الانزلاقي
+    this.updateSlidingFriction();
+
+    // ==================================================
+    // Air Resistance (Drag Force) - مقاومة الهواء
+    this.updateAirResistance();
 
     // ==================================================
     // dynamically added forces (gravity + friction + airResistance)

@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import GUI from "lil-gui";
 
 const textureLoader = new THREE.TextureLoader();
 
@@ -107,18 +106,18 @@ the sky color if the surface of the object is pointing up and the ground color i
 
   // const gui = new GUI();
 
-  const hemisphereLightFolder = gui.addFolder("HemisphereLight");
+  // hemisphereLight.visible = true;
 
-  hemisphereLight.visible = true;
-  hemisphereLightFolder.add(hemisphereLight, "visible").name("hemisphereLight");
+  // const hemisphereLightFolder = gui.addFolder("HemisphereLight");
+  // hemisphereLightFolder.add(hemisphereLight, "visible").name("hemisphereLight");
 
-  hemisphereLightFolder
-    .addColor(new ColorGUIHelper(hemisphereLight, "color"), "value")
-    .name("skyColor");
-  hemisphereLightFolder
-    .addColor(new ColorGUIHelper(hemisphereLight, "groundColor"), "value")
-    .name("groundColor");
-  hemisphereLightFolder.add(hemisphereLight, "intensity", 0, 5, 0.01);
+  // hemisphereLightFolder
+  //   .addColor(new ColorGUIHelper(hemisphereLight, "color"), "value")
+  //   .name("skyColor");
+  // hemisphereLightFolder
+  //   .addColor(new ColorGUIHelper(hemisphereLight, "groundColor"), "value")
+  //   .name("groundColor");
+  // hemisphereLightFolder.add(hemisphereLight, "intensity", 0, 5, 0.01);
 
   // DirectionalLight
   /* a directional light computes light coming in one direction.
@@ -131,17 +130,17 @@ the sky color if the surface of the object is pointing up and the ground color i
   scene.add(directionalLight);
   scene.add(directionalLight.target);
 
-  directionalLight.visible = true;
+  // directionalLight.visible = true;
 
-  const directionalLightFolder = gui.addFolder("DirectionalLight");
+  // const directionalLightFolder = gui.addFolder("DirectionalLight");
 
-  directionalLightFolder
-    .add(directionalLight, "visible")
-    .name("directionalLight");
-  directionalLightFolder
-    .addColor(new ColorGUIHelper(directionalLight, "color"), "value")
-    .name("color");
-  directionalLightFolder.add(directionalLight, "intensity", 0, 5, 0.01);
+  // directionalLightFolder
+  //   .add(directionalLight, "visible")
+  //   .name("directionalLight");
+  // directionalLightFolder
+  //   .addColor(new ColorGUIHelper(directionalLight, "color"), "value")
+  //   .name("color");
+  // directionalLightFolder.add(directionalLight, "intensity", 0, 5, 0.01);
 
   // const directionalLightHelper = new THREE.DirectionalLightHelper(
   //   directionalLight,
