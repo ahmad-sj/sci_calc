@@ -16,6 +16,11 @@ export class Ball {
   _orientation = new MyQuat();
   _contactNormal = new THREE.Vector3(0, 1, 0);
 
+  _dragCoefficient = 0.47;
+  _restitutionCoefficient = 0.4;
+
+  _onSurface = false;
+
   // ==================================================
   constructor() {
     this.geometry = new THREE.SphereGeometry(
@@ -61,8 +66,6 @@ export class Ball {
 
   set mass(number) {
     this._mass = number;
-    this._radius = number;
-    this.mesh.scale.x = this.mesh.scale.y = this.mesh.scale.z = number;
   }
 
   // ==================================================
@@ -75,27 +78,12 @@ export class Ball {
   }
 
   // ==================================================
-  get groundY() {
-    return this._groundY;
-  }
-
-  set groundY(number) {
-    this._groundY = number;
-    this._position.y = number + this._radius;
-  }
-
-  // ==================================================
   get linearVelocity() {
     return this._linearVelocity;
   }
 
   set linearVelocity(vector) {
     this._linearVelocity = vector;
-  }
-
-  // ==================================================
-  get isOnGround() {
-    return !(this._position.y <= this._groundY + this._radius + 0.001);
   }
 
   // ==================================================
@@ -117,6 +105,15 @@ export class Ball {
   }
 
   // ==================================================
+  get onSurface() {
+    return this._onSurface;
+  }
+
+  set onSurface(boolean) {
+    this._onSurface = boolean;
+  }
+
+  // ==================================================
   set type(input) {
     // update ball type
     this._type = input;
@@ -125,14 +122,20 @@ export class Ball {
     switch (input) {
       case "paper": {
         this._mass = 0.75;
+        this._dragCoefficient = 0.47;
+        this._restitutionCoefficient = 0.15;
         break;
       }
       case "stone": {
         this._mass = 3;
+        this._dragCoefficient = 0.52;
+        this._restitutionCoefficient = 0.25;
         break;
       }
       case "wood": {
         this._mass = 1.5;
+        this._dragCoefficient = 0.47;
+        this._restitutionCoefficient = 0.4;
         break;
       }
     }
@@ -168,10 +171,42 @@ export class Ball {
   }
 
   // ==================================================
-  rotate(axis, angle) {
-    this.mesh.rotateOnAxis(axis, angle);
+  get inertia() {
+    // عزم القصور الذاتي للكرة المتجانسة: I = 2/5 * m * r²
+    return +((2 / 5) * this._mass * this._radius * this._radius).toFixed(4);
   }
 
+  get effectiveMass() {
+    return +((7 / 5) * this._mass).toFixed(4);
+  }
+
+  get KE() {
+    // KE_ball = ½·m·v² + ½·I·ω²
+    return +(
+      0.5 * this._mass * this._linearVelocity.lengthSq() +
+      0.5 * this.inertia * this._angularVelocity * this._angularVelocity
+    ).toFixed(4);
+  }
+
+  // ==================================================
+  get dragCoefficient() {
+    return this._dragCoefficient;
+  }
+
+  set dragCoefficient(number) {
+    this._dragCoefficient = number;
+  }
+
+  // ==================================================
+  get restitutionCoefficient() {
+    return this._restitutionCoefficient;
+  }
+
+  set restitutionCoefficient(number) {
+    this._restitutionCoefficient = number;
+  }
+
+  // ==================================================
   reset() {
     this.linearVelocity.set(0, 0, 0);
     this.angularVelocity = 0;

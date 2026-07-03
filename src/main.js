@@ -33,7 +33,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, canvas });
 // ==================================================
 //setting camera controls
 const controls = new OrbitControls(camera, renderer.domElement);
-const cameraOffset = new THREE.Vector3(0, 10, 20); // Distance from object
+const cameraOffset = new THREE.Vector3(0, 10, 30); // Distance from object
 let cameraMode = true;
 
 // ==================================================
@@ -74,11 +74,13 @@ ground.addToScene(scene);
 const woodBoxPosition = new THREE.Vector3(16, 1, 3);
 const woodBoxSize = 2;
 const woodBox = new Box(woodBoxPosition, woodBoxSize, "wood_box");
+woodBox.mass = 3;
 woodBox.addToScene(scene);
 
 const ironBoxPosition = new THREE.Vector3(-16, 1, -6);
 const ironBoxSize = 2;
 const ironBox = new Box(ironBoxPosition, ironBoxSize, "iron_box");
+ironBox.mass = 8;
 ironBox.addToScene(scene);
 
 // ===================================================
@@ -90,7 +92,7 @@ const slopeNormal = new THREE.Vector3(0, 1, 0).normalize();
 
 const slope = new Slope(slopePosition, slopeWidth, slopeLength, slopeNormal);
 
-// show normals of solpe vertices
+// show normals of slope vertices
 const planeHelper = new VertexNormalsHelper(slope.mesh, 1, 0xff0000);
 scene.add(planeHelper);
 
@@ -116,21 +118,9 @@ listenToKeyboard(input);
 drawSkybox(scene);
 
 // ==================================================
-// lil-gui controls
-const ballFolder = gui.addFolder("Ball");
-ballFolder.add(ball, "mass").name("mass").disable();
-
-ballFolder
-  .add(ball, "type", Object.keys(ball.textures))
-  .name("type")
-  .onChange(() => {
-    updateAllGuiDisplays(gui);
-  });
-
-// ==================================================
-// force manager
 const forceManager = new ForceManager();
 forceManager.target = ball;
+forceManager._airResistanceMultiplier = 1;
 
 // ==================================================
 // collisions handling
@@ -142,7 +132,46 @@ collisionManager.addItem({ ironBox: ironBox });
 collisionManager.addItem({ slope: slope });
 
 // ==================================================
+// lil-gui controls
 
+// Ball folder
+const ballFolder = gui.addFolder("Ball");
+ballFolder.add(ball, "mass", 0.5, 9, 0.25).name("mass");
+ballFolder.add(ball, "inertia").name("inertia").disable();
+ballFolder.add(ball, "effectiveMass").name("effective mass").disable();
+ballFolder.add(ball, "onSurface").name("on surface").disable();
+ballFolder.add(ball, "type", Object.keys(ball.textures)).name("type");
+
+// coefficients / constants controls
+const coffecientsFolder = gui.addFolder("Coefficients / Constants");
+coffecientsFolder.add(forceManager, "_g", 0, 50, 0.2).name("gravity");
+coffecientsFolder.add(forceManager, "_mu", 0, 1, 0.1).name("fr_sliding");
+coffecientsFolder.add(forceManager, "_c_rr", 0, 0.1, 0.001).name("fr_rolling");
+coffecientsFolder.add(forceManager, "_rho", 0, 3, 0.3).name("rho_air");
+coffecientsFolder.add(ball, "dragCoefficient", 0, 1, 0.01).name("drag");
+coffecientsFolder
+  .add(forceManager, "_airResistanceMultiplier", 0, 3, 0.1)
+  .name("air resistance mult");
+
+// Wood Box Folder
+const woodBoxFolder = gui.addFolder("Wood Box");
+woodBoxFolder.add(woodBox, "_mass", 1, 20, 0.5).name("Mass");
+woodBoxFolder.add(woodBox, "_mu_floor", 0.1, 5, 0.1).name("Ground Friction");
+
+// Iron Box Folder
+const ironBoxFolder = gui.addFolder("Iron Box");
+ironBoxFolder.add(ironBox, "_mass", 1, 20, 0.5).name("Mass");
+ironBoxFolder.add(ironBox, "_mu_floor", 0.1, 5, 0.1).name("Ground Friction");
+
+// Energy Folder
+const energyFolder = gui.addFolder("Energy");
+energyFolder.add(ball, "KE").name("KE_ball").disable();
+energyFolder.add(woodBox, "KE").name("KE_box (wood)").disable();
+energyFolder.add(ironBox, "KE").name("KE_box (iron)").disable();
+energyFolder.add(woodBox, "lastEnergyLoss").name("ΔKE (wood)").disable();
+energyFolder.add(ironBox, "lastEnergyLoss").name("ΔKE (iron)").disable();
+
+// ==================================================
 function controlKeys() {
   if (input.reset) {
     ball.reset();
@@ -196,12 +225,10 @@ function animate(time) {
 
   planeHelper.update();
 
-  collisionManager.update();
-
+  collisionManager.update(dt);
   forceManager.update(input, dt);
 
-  console.log("contact: ", ball.contactNormal);
-  console.log("slope: ", slope.normal);
+  updateAllGuiDisplays(gui);
 
   updateCamera();
 
