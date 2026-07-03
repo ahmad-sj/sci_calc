@@ -4,6 +4,14 @@ import { getClosestPoint3d } from "../helpers";
 export class CollisionManager {
   _items = {};
 
+_lastEnergyLossWood = 0; // الطاقة المفقودة آخر تصادم مع الصندوق الخشبي
+_lastEnergyLossIron = 0; // الطاقة المفقودة آخر تصادم مع الصندوق الحديدي
+
+get lastEnergyLossWood() { return this._lastEnergyLossWood; }
+get lastEnergyLossIron() { return this._lastEnergyLossIron; }
+
+get lastEnergyLoss() { return this._lastEnergyLoss; }
+
   constructor(forceManager) {
     this._forceManager = forceManager;
   }
@@ -93,6 +101,11 @@ export class CollisionManager {
     // Jn = -(1+e) * v_rel_n / (1/m_B + 1/m_C + |r_A×n̂|²/I_B)
     const denominator = (1 / ball.mass) + (1 / item.mass) + (rAxNSq / I_B);
     const Jn = (-(1 + e) * vRelN) / denominator;
+    
+      // ── حساب الطاقة قبل التصادم ─────────────────────────────────
+      // KE_before = ½·m_ball·v² + ½·I·ω² (الصندوق ساكن قبل التصادم)
+    const KE_before = 0.5 * ball.mass * ball.linearVelocity.lengthSq()
+                + 0.5 * ball.inertia * ball.angularVelocity * ball.angularVelocity;
 
     // ── الخطوة 5: تحديث السرعات ─────────────────────────────────
     // v'_B = v_B + (Jn/m_B) * n̂  (الكرة)
@@ -116,6 +129,19 @@ export class CollisionManager {
     // تحديث السرعة الزاوية للصندوق
     item.angularVelocity.addScaledVector(torque, -1 / I_box);
     }
+  // ── حساب الطاقة بعد التصادم والطاقة المفقودة ────────────────
+  // KE_after = ½·m_ball·v'² + ½·I·ω'² + ½·m_box·v_box'²
+  const KE_after = 0.5 * ball.mass * ball.linearVelocity.lengthSq()
+               + 0.5 * ball.inertia * ball.angularVelocity * ball.angularVelocity
+               + 0.5 * item.mass * item.velocity.lengthSq();
+
+  // ΔKE = KE_before - KE_after (دايماً موجب — طاقة فقدت)
+  // نفرق بين الصندوق الخشبي والحديدي حسب كتلته
+  if (item.mass <= 3) {
+  this._lastEnergyLossWood = Math.max(0, KE_before - KE_after);
+  } else {
+  this._lastEnergyLossIron = Math.max(0, KE_before - KE_after);
+  }
   }
 
   checkSlopeCollision() {
