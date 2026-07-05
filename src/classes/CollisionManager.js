@@ -8,10 +8,6 @@ export class CollisionManager {
     this._forceManager = forceManager;
   }
 
-  get forceManager() {
-    return this._forceManager;
-  }
-
   addItem(item) {
     this._items[Object.keys(item)[0]] = Object.values(item)[0];
   }
@@ -152,7 +148,6 @@ export class CollisionManager {
     if (slope.contains(ball)) {
       // if ball is above slope surface
       if (distanceToSurface >= 0) {
-        forceManager.updateGravity(new THREE.Vector3(0, 1, 0));
         return false;
       }
 
@@ -165,9 +160,8 @@ export class CollisionManager {
       if (distanceToSurface < 0) {
         // slope is flat
         if (slope.normal.x == 0 && slope.normal.y == 1 && slope.normal.z == 0) {
-          forceManager.updateNormalForce();
-          this.correctPositionOnSlope(ball, slope, distanceToSurface);
           ball.contactNormal = new THREE.Vector3(0, 1, 0);
+          this.correctPositionOnSlope(ball, slope, distanceToSurface);
           forceManager._mu = 0.3;
           return true;
         }
@@ -175,7 +169,6 @@ export class CollisionManager {
         // slope is not flat
         ball.contactNormal = slope.normal;
         forceManager._mu = 0.1;
-        forceManager.updateGravity(slope.normal);
         this.correctPositionOnSlope(ball, slope, distanceToSurface);
         return true;
       }
@@ -192,7 +185,6 @@ export class CollisionManager {
   update(dt) {
     const ball = this._items["ball"];
     const ground = this._items["ground"];
-    const forceManager = this._forceManager;
 
     // Check collision with boxes
     for (const item of Object.values(this._items)) {
@@ -212,7 +204,7 @@ export class CollisionManager {
     const isOnSlope = this.checkSlopeCollision();
 
     if (!isOnSlope) {
-      forceManager.updateGravity(new THREE.Vector3(0, 1, 0));
+      ball.contactNormal = new THREE.Vector3(0, 1, 0);
     }
 
     // ===============================================
@@ -222,9 +214,8 @@ export class CollisionManager {
 
     // if ball penetrated the ground (also means ball on ground)
     if (ball.position.y < targetGroundY) {
-      forceManager.updateNormalForce();
-      ball.position.y = targetGroundY;
       ball.contactNormal = new THREE.Vector3(0, 1, 0);
+      ball.position.y = targetGroundY;
       isOnGround = true;
     }
 

@@ -58,21 +58,37 @@ export class ForceManager {
     delete this._forces[forceName];
   }
 
-  updateGravity(normal) {
-    // Fg = (m.g.sin(theta)).i^ - (m.g.cos(theta)).j^
+  updateGravity() {
+    const m = this._target.mass;
+    const g = this._g;
+    const surfaceNormal = this._target.contactNormal;
 
-    const target = this._target;
+    // j^ = (0, 1, 0)
+    const jHat = new THREE.Vector3(0, 1, 0);
 
-    const globalGravity = new THREE.Vector3(0, -this.g * target.mass, 0);
+    // Fg_total = -m.g.j^
+    const Fg_total = jHat.multiplyScalar(m * g).negate();
 
-    if (normal.x === 0 && normal.y === 1 && normal.z === 0) {
-      this.add({ gravity: globalGravity });
+    // surface is flat
+    if (
+      surfaceNormal.x === 0 &&
+      surfaceNormal.y === 1 &&
+      surfaceNormal.z === 0
+    ) {
+      this.add({ gravity: Fg_total });
       return;
     }
 
-    const Fg_down = normal.clone().multiplyScalar(globalGravity.dot(normal));
+    // Fg_total = Fg_down + Fg_parallel
+    // Fg_down calculation
+    // project Fg_total onto the surface normal to get the magnitude of Fg_down
+    // then multiply the surface normal by it to get the direction
+    const Fg_down = surfaceNormal
+      .clone()
+      .multiplyScalar(Fg_total.dot(surfaceNormal));
 
-    const Fg_parallel = globalGravity.clone().sub(Fg_down);
+    // Fg_parallel = Fg_total - Fg_down
+    const Fg_parallel = Fg_total.clone().sub(Fg_down);
 
     this.add({ gravity: Fg_parallel });
   }
@@ -256,6 +272,10 @@ export class ForceManager {
     // Input force (Impulse) - تطبيق دفعة اللاعب مباشرة على السرعة
     // J = F·Δt → v_final = v_initial + J/m
     this.applyPlayerImpulse(input, dt);
+
+    // ==================================================
+    // Gravity - تطبيق القوة الجاذبية
+    this.updateGravity();
 
     // ==================================================
     // Normal Force - حساب القوة الطبيعية لتطبيقها على الاحتكاك

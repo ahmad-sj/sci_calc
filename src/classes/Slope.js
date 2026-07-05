@@ -100,7 +100,7 @@ export class Slope {
 
   // rotate slope with keyboard input
   rotate(input) {
-    let rotationSpeed = 0.01;
+    let rotationSpeed = 0.015;
 
     if (input.right) {
       this.orientation.rotateOnAxis(new THREE.Vector3(0, 1, 0), rotationSpeed);
@@ -156,10 +156,10 @@ export class Slope {
   // Check if ball is within slope bounds
   contains(ball) {
     return (
-      ball.position.x >= this._minX - ball.radius &&
-      ball.position.x <= this._maxX + ball.radius &&
-      ball.position.z >= this._minZ + ball.radius &&
-      ball.position.z <= this._maxZ - ball.radius
+      ball.position.x >= this._minX - ball.radius / 3 &&
+      ball.position.x <= this._maxX + ball.radius / 3 &&
+      ball.position.z >= this._minZ + ball.radius / 3 &&
+      ball.position.z <= this._maxZ - ball.radius / 3
     );
   }
 }

@@ -71,7 +71,7 @@ ground.addToScene(scene);
 
 // ===================================================
 // draw boxes
-const woodBoxPosition = new THREE.Vector3(16, 1, 3);
+const woodBoxPosition = new THREE.Vector3(-24, 1, -6);
 const woodBoxSize = 2;
 const woodBox = new Box(woodBoxPosition, woodBoxSize, "wood_box");
 woodBox.mass = 3;
@@ -85,8 +85,8 @@ ironBox.addToScene(scene);
 
 // ===================================================
 // draw slope
-const slopePosition = new THREE.Vector3(0, 5, 0);
-const slopeWidth = 16;
+const slopePosition = new THREE.Vector3(0, 10, 0);
+const slopeWidth = 32;
 const slopeLength = 16;
 const slopeNormal = new THREE.Vector3(0, 1, 0).normalize();
 
@@ -101,7 +101,7 @@ slope.addToScene(scene);
 // ==================================================
 // draw ball
 const ball = new Ball();
-ball.position.set(0, 10, 0);
+ball.position.set(0, 15, 0);
 ball.addToScene(scene);
 
 // ===================================================
@@ -229,6 +229,7 @@ function animate(time) {
   planeHelper.update();
 
   collisionManager.update(dt);
+
   forceManager.update(input, dt);
 
   updateAllGuiDisplays(gui);
