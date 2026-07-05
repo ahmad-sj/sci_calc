@@ -165,7 +165,7 @@ export class CollisionManager {
       if (distanceToSurface < 0) {
         // slope is flat
         if (slope.normal.x == 0 && slope.normal.y == 1 && slope.normal.z == 0) {
-          forceManager.removeGravity();
+          forceManager.updateNormalForce();
           this.correctPositionOnSlope(ball, slope, distanceToSurface);
           ball.contactNormal = new THREE.Vector3(0, 1, 0);
           forceManager._mu = 0.3;
@@ -222,7 +222,7 @@ export class CollisionManager {
 
     // if ball penetrated the ground (also means ball on ground)
     if (ball.position.y < targetGroundY) {
-      forceManager.removeGravity();
+      forceManager.updateNormalForce();
       ball.position.y = targetGroundY;
       ball.contactNormal = new THREE.Vector3(0, 1, 0);
       isOnGround = true;

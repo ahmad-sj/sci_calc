@@ -77,10 +77,7 @@ export class ForceManager {
     this.add({ gravity: Fg_parallel });
   }
 
-  removeGravity() {
-    this.remove("gravity");
-  }
-
+  // القانون الفيزيائي: N = m * g * cos(theta)
   updateNormalForce() {
     const ball = this._target;
     const surfaceNormal = ball.contactNormal;
@@ -88,6 +85,7 @@ export class ForceManager {
     // إذا كانت الكرة في الهواء، القوة الطبيعية تنعدم فوراً
     if (!ball.onSurface) {
       this._normalForceMagnitude = 0;
+      this.remove("normalForce");
       return;
     }
 
@@ -102,11 +100,13 @@ export class ForceManager {
     // القانون الفيزيائي: N = m * g * cos(theta)
     // نضمن أن القيمة لا تنزل تحت الصفر بأي حال
     this._normalForceMagnitude = Math.max(0, m * g * cosTheta);
-  }
 
-  // كرمال نستدعي قيمة القوة الطبيعية بسهولة بكود الاحتكاك
-  get normalForceMagnitude() {
-    return this._normalForceMagnitude;
+    // normal force Vector = normalForceMagnitude * surfaceNormal
+    this.add({
+      normalForce: new THREE.Vector3()
+        .copy(surfaceNormal)
+        .multiplyScalar(this._normalForceMagnitude),
+    });
   }
 
   /**

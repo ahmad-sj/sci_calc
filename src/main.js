@@ -150,6 +150,9 @@ coffecientsFolder.add(forceManager, "_c_rr", 0, 0.1, 0.001).name("fr_rolling");
 coffecientsFolder.add(forceManager, "_rho", 0, 3, 0.3).name("rho_air");
 coffecientsFolder.add(ball, "dragCoefficient", 0, 1, 0.01).name("drag");
 coffecientsFolder
+  .add(ball, "_restitutionCoefficient", 0, 1, 0.05)
+  .name("restitution");
+coffecientsFolder
   .add(forceManager, "_airResistanceMultiplier", 0, 3, 0.1)
   .name("air resistance mult");
 
