@@ -62,34 +62,40 @@ export class ForceManager {
     const m = this._target.mass;
     const g = this._g;
     const surfaceNormal = this._target.contactNormal;
+    const worldUp = new THREE.Vector3(0, 1, 0);
 
-    // j^ = (0, 1, 0)
-    const jHat = new THREE.Vector3(0, 1, 0);
+    // 1. Check if the surface is flat
+    // using dot product, if normal points straight up, dot product is 1
+    const isFlat = surfaceNormal.dot(worldUp) > 0.999;
 
-    // Fg_total = -m.g.j^
-    const Fg_total = jHat.multiplyScalar(m * g).negate();
-
-    // surface is flat
-    if (
-      surfaceNormal.x === 0 &&
-      surfaceNormal.y === 1 &&
-      surfaceNormal.z === 0
-    ) {
+    if (isFlat) {
+      // Fg_total = -m.g.j^
+      const Fg_total = new THREE.Vector3(0, -m * g, 0);
       this.add({ gravity: Fg_total });
       return;
     }
 
-    // Fg_total = Fg_down + Fg_parallel
-    // Fg_down calculation
-    // project Fg_total onto the surface normal to get the magnitude of Fg_down
-    // then multiply the surface normal by it to get the direction
-    const Fg_down = surfaceNormal
-      .clone()
-      .multiplyScalar(Fg_total.dot(surfaceNormal));
+    // Surface is not flat, calculate Fg_parallel
+    // Fg_parallel = -m.g.sin(theta).i^
 
-    // Fg_parallel = Fg_total - Fg_down
-    const Fg_parallel = Fg_total.clone().sub(Fg_down);
+    // 2. Find a vector pointing sideways along the slope (perpendicular to normal and up)
+    // This vector's length naturally contains the sin(theta) scalar
+    const slopeSideways = new THREE.Vector3().crossVectors(
+      surfaceNormal,
+      worldUp,
+    );
 
+    // 3. Cross the normal back with the sideways vector to get the vector pointing straight DOWNHILL
+    // This gives us the direction (i^), pre-scaled by sin(theta)
+    const Fg_parallel = new THREE.Vector3().crossVectors(
+      surfaceNormal,
+      slopeSideways,
+    );
+
+    // 4. Scale by mass and gravity constants
+    Fg_parallel.multiplyScalar(m * g);
+
+    // 5. Pass the downhill sliding force to the physics system
     this.add({ gravity: Fg_parallel });
   }
 

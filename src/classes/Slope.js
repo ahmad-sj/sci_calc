@@ -155,11 +155,18 @@ export class Slope {
 
   // Check if ball is within slope bounds
   contains(ball) {
+    const w = this._width;
+    const cosTheta = this._normal.dot(new THREE.Vector3(0, 1, 0));
+    const dx = (w / 2) * (1 - cosTheta);
+
+    const l = this._length;
+    const dy = (l / 2) * (1 - cosTheta);
+
     return (
-      ball.position.x >= this._minX - ball.radius / 3 &&
-      ball.position.x <= this._maxX + ball.radius / 3 &&
-      ball.position.z >= this._minZ + ball.radius / 3 &&
-      ball.position.z <= this._maxZ - ball.radius / 3
+      ball.position.x >= this._minX + dx - ball.radius / 3 &&
+      ball.position.x <= this._maxX - dx + ball.radius / 3 &&
+      ball.position.z >= this._minZ + dy + ball.radius / 3 &&
+      ball.position.z <= this._maxZ - dy - ball.radius / 3
     );
   }
 }
