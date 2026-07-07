@@ -13,17 +13,17 @@ export class CollisionManager {
   }
 
   checkAABBCollision(ball, item) {
-    // 1. Find closest point on item to ball's center
+    // Find closest point on item to ball's center
     const closestPoint = getClosestPoint3d(item, ball);
 
-    // 2. Calc distance between ball's center and closest point
+    // Calc distance between ball's center and closest point
     const distance = Math.sqrt(
       (closestPoint.x - ball.position.x) ** 2 +
         (closestPoint.y - ball.position.y) ** 2 +
         (closestPoint.z - ball.position.z) ** 2,
     );
 
-    // 3. if distance is smaller than ball's radius, we have a collision
+    // if distance is smaller than ball's radius, we have a collision
     return {
       isColliding: distance < ball.radius,
       closestPoint: closestPoint,
@@ -36,8 +36,8 @@ export class CollisionManager {
 
     if (!collision.isColliding) return;
 
-    // ── الخطوة 1: حساب ناظم التصادم n̂ ────────────────────────
-    // n̂ = d / |d|  حيث d = C_ball - P_closest
+    // find collision normal
+    // n̂ = d / |d| ; d = C_ball - P_closest
     let normal;
     if (collision.distance < 0.0001) {
       // حالة خاصة: مركز الكرة داخل الصندوق تقريباً
@@ -48,7 +48,7 @@ export class CollisionManager {
         .normalize();
     }
 
-    // ── الخطوة 2: تصحيح الموضع (Position Correction) ──────────
+    // correct ball position
     // depth = r - |d|
     // C'_ball = C_ball + n̂ * depth
     const penetrationDepth = ball.radius - collision.distance;
@@ -56,12 +56,12 @@ export class CollisionManager {
       .clone()
       .addScaledVector(normal, penetrationDepth);
 
-    // ── الخطوة 3: حساب السرعة النسبية عند نقطة التماس ──────────
-    // r_A = -r * n̂  (من مركز الكرة إلى نقطة التماس)
+    // calc rel vel at point of contact
+    // r_A = -r * n̂
     const rA = normal.clone().multiplyScalar(-ball.radius);
 
     // v_rel = (v_B + ω_B × r_A) - v_C
-    // ω_B × r_A: السرعة المماسية الناتجة عن دوران الكرة
+    // ω_B × r_A
     const omegaVec = new THREE.Vector3().crossVectors(
       new THREE.Vector3(0, ball.angularVelocity, 0),
       rA,
@@ -70,17 +70,16 @@ export class CollisionManager {
       .addVectors(ball.linearVelocity, omegaVec)
       .sub(item.velocity);
 
-    // v_rel_n = v_rel · n̂ (إسقاط على محور العمود)
+    // v_rel_n = v_rel · n̂
     const vRelN = vRel.dot(normal);
 
-    // إذا الجسمان يبتعدان → لا تصادم فعلي
+    // if ball and box are moving away from each other, no collision
     if (vRelN > 0) return;
 
-    // ── الخطوة 4: حساب مقدار الدفعة Jn ────────────────────────
-    // معامل الارتداد حسب نوع الكرة
+    // calc impulse magnitude
     const e = ball.restitutionCoefficient;
 
-    // I_B = 2/5 * m * r²  (من getter بـ ball.js)
+    // I_B = 2/5 * m * r²
     const I_B = ball.inertia;
 
     // |r_A × n̂|²
@@ -91,45 +90,46 @@ export class CollisionManager {
     const denominator = 1 / ball.mass + 1 / item.mass + rAxNSq / I_B;
     const Jn = (-(1 + e) * vRelN) / denominator;
 
-    // ── حساب الطاقة قبل التصادم ─────────────────────────────────
-    // KE_before = ½·m_ball·v² + ½·I·ω² (الصندوق ساكن قبل التصادم)
+    // KE_before = ½·m_ball·v² + ½·I·ω²
     const KE_before =
       0.5 * ball.mass * ball.linearVelocity.lengthSq() +
       0.5 * ball.inertia * ball.angularVelocity * ball.angularVelocity;
 
-    // ── الخطوة 5: تحديث السرعات ─────────────────────────────────
-    // v'_B = v_B + (Jn/m_B) * n̂  (الكرة)
+    // update velocities
+    // v'_B = v_B + (Jn/m_B) * n̂
     ball.linearVelocity.addScaledVector(normal, Jn / ball.mass);
 
-    // v'_C = v_C - (Jn/m_C) * n̂  (الصندوق - إشارة سالبة: نيوتن الثالث)
+    // v'_C = v_C - (Jn/m_C) * n̂
     item.velocity.addScaledVector(normal, -Jn / item.mass);
 
-    // الخطوة 6: عزم الدوران على الصندوق
-    // نقطة التصادم بالنسبة لمركز الصندوق
+    // calc torque affecting box
+    // find contact point on box
     const rBox = new THREE.Vector3().subVectors(
       collision.closestPoint,
       item.position,
     );
-    // فقط إذا في ذراع دوران حقيقي (ضربة على الزاوية مش الوجه)
+
+    // if there is a real rotational torque (hit on the corner not the face)
     if (Math.abs(Jn) > 0.5 && rBox.lengthSq() > 0.01) {
-      // عزم الدوران = r × (Jn * n̂)
+      // t = r × (Jn * n̂)
       const impulseVec = normal.clone().multiplyScalar(Jn);
       const torque = new THREE.Vector3().crossVectors(rBox, impulseVec);
 
-      // I_box = 1/6 * m * size²  (للمكعب)
+      // I_box = 1/6 * m * size²
       const I_box = (1 / 6) * item.mass * item.size * item.size * 2;
 
-      // تحديث السرعة الزاوية للصندوق
+      // update box angular velocity
       item.angularVelocity.addScaledVector(torque, -1 / I_box);
     }
-    // ── حساب الطاقة بعد التصادم والطاقة المفقودة ────────────────
+
+    // calc kinetic energy after collision and lost energy
     // KE_after = ½·m_ball·v'² + ½·I·ω'² + ½·m_box·v_box'²
     const KE_after =
       0.5 * ball.mass * ball.linearVelocity.lengthSq() +
       0.5 * ball.inertia * ball.angularVelocity * ball.angularVelocity +
       0.5 * item.mass * item.velocity.lengthSq();
 
-    // ΔKE = KE_before - KE_after (دايماً موجب — طاقة فقدت)
+    // ΔKE = KE_before - KE_after
     item.lastEnergyLoss = Math.max(0, KE_before - KE_after);
   }
 
@@ -138,7 +138,7 @@ export class CollisionManager {
     const slope = this._items["slope"];
     const forceManager = this._forceManager;
 
-    // Get theoretical ground height at ball's center (X,Z)
+    // Get ground height at ball's center (X,Z)
     const slopeY = slope.getHeightAt(ball.position.x, ball.position.z);
 
     // Distance from ball center to slope surface

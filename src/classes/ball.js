@@ -172,7 +172,7 @@ export class Ball {
 
   // ==================================================
   get inertia() {
-    // عزم القصور الذاتي للكرة المتجانسة: I = 2/5 * m * r²
+    // I = 2/5 * m * r²
     return +((2 / 5) * this._mass * this._radius * this._radius).toFixed(4);
   }
 
